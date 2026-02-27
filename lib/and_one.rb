@@ -131,5 +131,8 @@ require_relative "and_one/detector"
 require_relative "and_one/fingerprint"
 require_relative "and_one/formatter"
 require_relative "and_one/association_resolver"
+require_relative "and_one/scan_helper"
 require_relative "and_one/middleware"
+require_relative "and_one/active_job_hook"
+require_relative "and_one/sidekiq_middleware"
 require_relative "and_one/railtie" if defined?(Rails::Railtie)

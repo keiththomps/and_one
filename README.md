@@ -13,6 +13,7 @@ AndOne stays completely invisible until it detects an N+1 query — then it tell
 | Clean error handling | ✅ Never corrupts backtraces | ❌ Can mess up error output | ❌ |
 | No external deps | ✅ Only Rails | ❌ Needs pg_query for Postgres | ❌ Has dependencies |
 | Test integration | ✅ Auto-raises in test env | ⚠️ Manual setup | ⚠️ Manual setup |
+| Background jobs | ✅ ActiveJob + Sidekiq | ⚠️ Sidekiq only (separate gem) | ❌ |
 
 ## Installation
 
@@ -50,6 +51,31 @@ When an N+1 is detected, you get output like:
 
 ──────────────────────────────────────────────────────────────────────────
 ```
+
+## Background Jobs
+
+### ActiveJob (any backend)
+
+Automatically hooked via `around_perform`. Works with **every** ActiveJob backend:
+Sidekiq, GoodJob, SolidQueue, Delayed Job, Resque, and anything else that uses ActiveJob.
+
+No configuration needed — the Railtie handles it.
+
+### Sidekiq (direct usage)
+
+For jobs that use Sidekiq directly (bypassing ActiveJob), AndOne installs a server middleware automatically when Sidekiq is detected.
+
+If you need manual installation:
+
+```ruby
+Sidekiq.configure_server do |config|
+  config.server_middleware do |chain|
+    chain.add AndOne::SidekiqMiddleware
+  end
+end
+```
+
+When both hooks are active (ActiveJob job running through Sidekiq), the Sidekiq middleware detects the existing scan from ActiveJobHook and passes through — no double-scanning.
 
 ## Behavior by Environment
 
