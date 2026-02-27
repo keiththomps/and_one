@@ -5,11 +5,17 @@ require_relative "and_one/version"
 module AndOne
   class NPlus1Error < StandardError; end
 
+  # Mutex for protecting lazy singleton initialization (aggregate, ignore_list)
+  # and serializing report output so multi-line messages don't interleave
+  # across Puma threads.
+  @singleton_mutex = Mutex.new
+  @report_mutex = Mutex.new
+
   class << self
     attr_accessor :enabled, :raise_on_detect, :backtrace_cleaner,
                   :allow_stack_paths, :ignore_queries, :ignore_callers,
                   :min_n_queries, :notifications_callback, :aggregate_mode,
-                  :ignore_file_path
+                  :ignore_file_path, :json_logging, :env_thresholds
 
     def configure
       yield self
@@ -79,16 +85,22 @@ module AndOne
     end
 
     def aggregate
-      @aggregate ||= Aggregate.new
+      @singleton_mutex.synchronize do
+        @aggregate ||= Aggregate.new
+      end
     end
 
     def ignore_list
-      @ignore_list ||= IgnoreFile.new(resolve_ignore_file_path)
+      @singleton_mutex.synchronize do
+        @ignore_list ||= IgnoreFile.new(resolve_ignore_file_path)
+      end
     end
 
     # Reset cached ignore file (useful after config change)
     def reload_ignore_file!
-      @ignore_list = nil
+      @singleton_mutex.synchronize do
+        @ignore_list = nil
+      end
     end
 
     private
@@ -97,9 +109,32 @@ module AndOne
       thread_state[:and_one_detector] = Detector.new(
         allow_stack_paths: allow_stack_paths || [],
         ignore_queries: ignore_queries || [],
-        min_n_queries: min_n_queries || 2
+        min_n_queries: effective_min_n_queries
       )
       thread_state[:and_one_paused] = false
+    end
+
+    # Resolve the effective min_n_queries, checking per-environment thresholds
+    # first, then falling back to the global setting.
+    #
+    # Configure per-environment thresholds:
+    #   AndOne.env_thresholds = { "development" => 3, "test" => 2 }
+    #
+    def effective_min_n_queries
+      if env_thresholds.is_a?(Hash) && current_env
+        threshold = env_thresholds[current_env] || env_thresholds[current_env.to_sym]
+        return threshold if threshold
+      end
+
+      min_n_queries || 2
+    end
+
+    def current_env
+      if defined?(Rails) && Rails.respond_to?(:env)
+        Rails.env.to_s
+      else
+        ENV["RAILS_ENV"] || ENV["RACK_ENV"]
+      end
     end
 
     def stop_scan
@@ -130,34 +165,51 @@ module AndOne
         return if detections.empty?
       end
 
-      formatter = Formatter.new(
-        backtrace_cleaner: backtrace_cleaner || default_backtrace_cleaner
-      )
+      cleaner = backtrace_cleaner || default_backtrace_cleaner
 
+      formatter = Formatter.new(backtrace_cleaner: cleaner)
       message = formatter.format(detections)
 
-      notifications_callback&.call(detections, message)
+      # Serialize all output through a mutex so multi-line messages
+      # from concurrent Puma threads don't interleave.
+      @report_mutex.synchronize do
+        # JSON logging for log aggregation services
+        if json_logging
+          json_formatter = JsonFormatter.new(backtrace_cleaner: cleaner)
+          json_output = json_formatter.format(detections)
 
-      # GitHub Actions annotations
-      if ENV["GITHUB_ACTIONS"]
-        detections.each do |d|
-          file, line = parse_frame_location(d.fix_location || d.origin_frame)
-          query_count = "#{d.count} queries to `#{d.table_name || 'unknown'}`"
-          if file
-            $stdout.puts "::warning file=#{file},line=#{line || 1}::N+1 detected: #{query_count}. Add `.includes(:#{suggest_association_name(d)})` to fix."
+          if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
+            Rails.logger.warn(json_output)
           else
-            $stdout.puts "::warning ::N+1 detected: #{query_count}."
+            $stderr.puts(json_output)
           end
         end
-      end
 
-      if raise_on_detect
-        raise NPlus1Error, "\n#{message}"
-      else
-        if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
-          Rails.logger.warn("\n#{message}")
+        notifications_callback&.call(detections, message)
+
+        # GitHub Actions annotations
+        if ENV["GITHUB_ACTIONS"]
+          detections.each do |d|
+            file, line = parse_frame_location(d.fix_location || d.origin_frame)
+            query_count = "#{d.count} queries to `#{d.table_name || 'unknown'}`"
+            if file
+              $stdout.puts "::warning file=#{file},line=#{line || 1}::N+1 detected: #{query_count}. Add `.includes(:#{suggest_association_name(d)})` to fix."
+            else
+              $stdout.puts "::warning ::N+1 detected: #{query_count}."
+            end
+          end
         end
-        $stderr.puts("\n#{message}") if $stderr.tty?
+
+        if raise_on_detect
+          raise NPlus1Error, "\n#{message}"
+        else
+          unless json_logging
+            if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
+              Rails.logger.warn("\n#{message}")
+            end
+            $stderr.puts("\n#{message}") if $stderr.tty?
+          end
+        end
       end
     end
 
@@ -212,12 +264,14 @@ require_relative "and_one/detection"
 require_relative "and_one/detector"
 require_relative "and_one/fingerprint"
 require_relative "and_one/formatter"
+require_relative "and_one/json_formatter"
 require_relative "and_one/association_resolver"
 require_relative "and_one/ignore_file"
 require_relative "and_one/aggregate"
 require_relative "and_one/matchers"
 require_relative "and_one/scan_helper"
 require_relative "and_one/dev_ui"
+require_relative "and_one/console"
 require_relative "and_one/middleware"
 require_relative "and_one/active_job_hook"
 require_relative "and_one/sidekiq_middleware"

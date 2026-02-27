@@ -41,12 +41,12 @@
 
 - [x] **`preload` vs `includes` vs `eager_load` recommendation** — Suggest the optimal loading strategy based on the query pattern (e.g., `eager_load` when there's a WHERE on the association).
 
-## 🧪 Lower Priority — Nice to Have
+## ✅ Lower Priority — Nice to Have (Completed)
 
-- [ ] **Structured JSON logging** — A JSON output mode for log aggregation services (Datadog, Splunk, etc.).
+- [x] **Structured JSON logging** — A JSON output mode for log aggregation services (Datadog, Splunk, etc.). Set `AndOne.json_logging = true`. Uses `JsonFormatter` which outputs structured JSON with event, table, fingerprint, query count, suggestion, and backtrace. Also provides `format_hashes` for integrations that accept Ruby hashes directly.
 
-- [ ] **Thread-safety audit for Puma** — The current thread-local approach works, but formally verify behavior with Puma's thread pool and connection pool interactions under concurrent load.
+- [x] **Thread-safety audit for Puma** — Formal audit and stress test suite complete. Found and fixed a **critical cross-thread contamination bug** in `Detector#subscribe`: the `ActiveSupport::Notifications` callback closure captured `self`, causing SQL from one thread to be recorded in another thread's Detector. Fixed by checking `Thread.current[:and_one_detector].object_id` in the callback. Also added Mutex protection for lazy singletons (`aggregate`, `ignore_list`), `AssociationResolver.@table_model_cache`, and report output serialization. 14 concurrent stress tests verify isolation, atomicity, and correctness under Puma-like load.
 
-- [ ] **Rails console integration** — Auto-scan in `rails console` sessions and print warnings inline. Useful for debugging queries interactively.
+- [x] **Rails console integration** — Auto-scan in `rails console` sessions and print warnings inline. Activated automatically by the Railtie in development, or manually via `AndOne::Console.activate!`. Hooks into IRB (via `Context#evaluate` prepend) and Pry (via `:after_eval` hook) to cycle scans between commands.
 
-- [ ] **Configurable per-environment thresholds** — Different `min_n_queries` for dev vs test. In dev you might tolerate 3+, in test you want strict 2+.
+- [x] **Configurable per-environment thresholds** — Different `min_n_queries` for dev vs test. Configure via `AndOne.env_thresholds = { "development" => 3, "test" => 2 }`. Falls back to global `min_n_queries` when no env-specific threshold is set. Supports both string and symbol keys.

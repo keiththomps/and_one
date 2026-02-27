@@ -67,6 +67,8 @@ module AndOneTestHelper
     AndOne.min_n_queries = 2
     AndOne.notifications_callback = nil
     AndOne.aggregate_mode = false
+    AndOne.json_logging = false
+    AndOne.env_thresholds = nil
     AndOne.ignore_file_path = nil
     AndOne.reload_ignore_file!
     AndOne.instance_variable_set(:@aggregate, nil)

@@ -33,20 +33,30 @@ module AndOne
       )
     end
 
-    # Maps table name -> AR model class
+    # Maps table name -> AR model class.
+    # Thread-safe: uses a Mutex to protect the shared cache since multiple
+    # Puma threads may resolve associations concurrently.
     def model_for_table(table_name)
-      # Use AR's descendants to find the model for this table
+      @table_model_mutex ||= Mutex.new
       @table_model_cache ||= {}
+
+      # Fast path: read from cache without lock (safe because we never delete keys,
+      # and Hash#[] under GVL is atomic for existing keys)
       return @table_model_cache[table_name] if @table_model_cache.key?(table_name)
 
-      model = ActiveRecord::Base.descendants.detect do |klass|
-        klass.table_name == table_name
-      rescue
-        false
-      end
+      @table_model_mutex.synchronize do
+        # Double-check after acquiring lock
+        return @table_model_cache[table_name] if @table_model_cache.key?(table_name)
 
-      @table_model_cache[table_name] = model
-      model
+        model = ActiveRecord::Base.descendants.detect do |klass|
+          klass.table_name == table_name
+        rescue
+          false
+        end
+
+        @table_model_cache[table_name] = model
+        model
+      end
     end
 
     # Finds the first backtrace frame that's in the app (not a gem/framework frame)

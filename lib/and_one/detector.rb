@@ -39,8 +39,20 @@ module AndOne
     private
 
     def subscribe
+      # IMPORTANT: The notification callback fires on whatever thread triggered the SQL,
+      # NOT necessarily the thread that created this Detector. We must look up the
+      # current thread's detector (via Thread.current) to avoid cross-thread contamination.
+      # We store our object_id so the callback can verify it's writing to the correct instance.
+      detector_id = object_id
+
       @subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
         next unless AndOne.scanning? && !AndOne.paused?
+
+        # Only record if the current thread's detector is THIS detector.
+        # Under Puma, multiple Detectors may be subscribed simultaneously;
+        # each must only process its own thread's queries.
+        current_detector = Thread.current[:and_one_detector]
+        next unless current_detector&.object_id == detector_id
 
         sql = payload[:sql]
         name = payload[:name]
@@ -48,9 +60,9 @@ module AndOne
         next if name == "SCHEMA"
         next if !sql.include?("SELECT")
         next if payload[:cached]
-        next if ignored?(sql)
+        next if current_detector.send(:ignored?, sql)
 
-        record_query(sql, payload)
+        current_detector.send(:record_query, sql, payload)
       end
     end
 

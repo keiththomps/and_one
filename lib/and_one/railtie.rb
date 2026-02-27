@@ -35,5 +35,14 @@ module AndOne
         AndOne.enabled = false
       end
     end
+
+    # Auto-activate console scanning in development
+    console do
+      if AndOne.enabled? && Rails.env.development?
+        AndOne::Console.activate!
+
+        at_exit { AndOne::Console.deactivate! }
+      end
+    end
   end
 end
