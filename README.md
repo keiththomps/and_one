@@ -4,19 +4,26 @@ Detect N+1 queries in Rails applications with zero configuration and actionable 
 
 AndOne stays completely invisible until it detects an N+1 query — then it tells you exactly what's wrong and how to fix it. No external dependencies beyond Rails itself.
 
-## Why not Prosopite / Bullet?
+## Features
 
-| | AndOne | Prosopite | Bullet |
-|---|---|---|---|
-| Zero config | ✅ Railtie auto-setup | ❌ Manual middleware + config | ❌ Manual config |
-| Fix suggestions | ✅ Suggests exact `.includes()` | ❌ Just shows queries | ⚠️ Sometimes |
-| Clean error handling | ✅ Never corrupts backtraces | ❌ Can mess up error output | ❌ |
-| No external deps | ✅ Only Rails | ❌ Needs pg_query for Postgres | ❌ Has dependencies |
-| Test integration | ✅ Auto-raises in test env | ⚠️ Manual setup | ⚠️ Manual setup |
-| Background jobs | ✅ ActiveJob + Sidekiq | ⚠️ Sidekiq only (separate gem) | ❌ |
-| Ignore file | ✅ `.and_one_ignore` with gem/path/query/fingerprint rules | ❌ | ❌ |
-| Aggregate mode | ✅ Report each unique N+1 once per session | ❌ | ❌ |
-| Test matchers | ✅ Minitest + RSpec | ❌ | ⚠️ |
+- **Zero configuration** — Railtie auto-setup in development and test
+- **Actionable fix suggestions** — suggests the exact `.includes()`, `.preload()`, or `.eager_load()` call
+- **Smart location detection** — identifies both the origin (where the N+1 fires) and the fix location (where to add `.includes`)
+- **Clean error handling** — never corrupts backtraces or interferes with exception propagation
+- **No external dependencies** — only Rails itself
+- **Auto-raises in test** — N+1s fail your test suite by default
+- **Background job support** — ActiveJob (`around_perform`) and Sidekiq server middleware, with double-scan protection
+- **Ignore file** — `.and_one_ignore` with `gem:`, `path:`, `query:`, and `fingerprint:` rules
+- **Aggregate mode** — report each unique N+1 once per server session with occurrence counts
+- **Test matchers** — Minitest (`assert_no_n_plus_one`) and RSpec (`expect { }.not_to cause_n_plus_one`)
+- **Dev UI dashboard** — browse `/__and_one` in development for a live N+1 overview
+- **Rails console integration** — auto-scans in `rails console` and prints warnings inline
+- **Structured JSON logging** — JSON output mode for Datadog, Splunk, and other log aggregation services
+- **Per-environment thresholds** — different `min_n_queries` for development vs test
+- **GitHub Actions annotations** — N+1s appear as warning annotations on PR diffs
+- **`strict_loading` suggestions** — also suggests model-level prevention as an alternative
+- **`has_many :through` and polymorphic support** — resolves complex association chains
+- **Thread-safe under Puma** — per-thread isolation verified with concurrent stress tests
 
 ## Installation
 
