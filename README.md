@@ -1,43 +1,136 @@
-# AndOne
+# 🏀 AndOne
 
-TODO: Delete this and the text below, and describe your gem
+Detect N+1 queries in Rails applications with zero configuration and actionable fix suggestions.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/and_one`. To experiment with that code, run `bin/console` for an interactive prompt.
+AndOne stays completely invisible until it detects an N+1 query — then it tells you exactly what's wrong and how to fix it. No external dependencies beyond Rails itself.
+
+## Why not Prosopite / Bullet?
+
+| | AndOne | Prosopite | Bullet |
+|---|---|---|---|
+| Zero config | ✅ Railtie auto-setup | ❌ Manual middleware + config | ❌ Manual config |
+| Fix suggestions | ✅ Suggests exact `.includes()` | ❌ Just shows queries | ⚠️ Sometimes |
+| Clean error handling | ✅ Never corrupts backtraces | ❌ Can mess up error output | ❌ |
+| No external deps | ✅ Only Rails | ❌ Needs pg_query for Postgres | ❌ Has dependencies |
+| Test integration | ✅ Auto-raises in test env | ⚠️ Manual setup | ⚠️ Manual setup |
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
+Add to your Gemfile:
 
-Install the gem and add to the application's Gemfile by executing:
-
-```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+```ruby
+group :development, :test do
+  gem "and_one"
+end
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
+That's it. AndOne automatically activates in development and test environments via a Railtie.
 
-```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+## What You'll See
+
+When an N+1 is detected, you get output like:
+
+```
+──────────────────────────────────────────────────────────────────────────
+ 🏀 And One! 1 N+1 query detected
+──────────────────────────────────────────────────────────────────────────
+
+  1) 9x repeated query on `comments`
+
+  Query:
+    SELECT "comments".* FROM "comments" WHERE "comments"."post_id" = ?
+
+  Call stack:
+  → app/views/posts/index.html.erb:5
+    app/controllers/posts_controller.rb:8
+
+  💡 Fix:
+    Add `.includes(:comments)` to your Post query
+    at app/controllers/posts_controller.rb:8
+
+──────────────────────────────────────────────────────────────────────────
 ```
 
-## Usage
+## Behavior by Environment
 
-TODO: Write usage instructions here
+- **Development**: Logs N+1 warnings to Rails logger and stderr
+- **Test**: Raises `AndOne::NPlus1Error` so N+1s fail your test suite
+- **Production**: Completely disabled (not even loaded)
 
-## Development
+## Configuration
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake test` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+AndOne works out of the box, but you can customize:
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+```ruby
+# config/initializers/and_one.rb
+AndOne.configure do |config|
+  # Raise on detection (default: true in test, false in development)
+  config.raise_on_detect = false
 
-## Contributing
+  # Minimum repeated queries to trigger (default: 2)
+  config.min_n_queries = 3
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/and_one. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/[USERNAME]/and_one/blob/main/CODE_OF_CONDUCT.md).
+  # Allow specific patterns (won't flag these call stacks)
+  config.allow_stack_paths = [
+    /admin_controller/,
+    /some_legacy_code/
+  ]
+
+  # Ignore specific query patterns
+  config.ignore_queries = [
+    /pg_catalog/,
+    /schema_migrations/
+  ]
+
+  # Custom backtrace cleaner
+  config.backtrace_cleaner = Rails.backtrace_cleaner
+
+  # Custom callback for integrations (logging services, etc.)
+  config.notifications_callback = ->(detections, message) {
+    # detections is an array of AndOne::Detection objects
+    # message is the formatted string
+    MyLogger.warn(message)
+  }
+end
+```
+
+## Manual Scanning
+
+You can also scan specific blocks:
+
+```ruby
+# In a test
+detections = AndOne.scan do
+  posts = Post.all
+  posts.each { |p| p.comments.to_a }
+end
+
+assert_empty detections
+
+# Pause/resume within a scan
+AndOne.scan do
+  # This is scanned
+  posts.each { |p| p.comments.to_a }
+
+  AndOne.pause do
+    # This is NOT scanned
+    legacy_code_with_known_n_plus_ones
+  end
+
+  # Scanning resumes automatically after the pause block
+end
+```
+
+## How It Works
+
+1. **Subscribe** to `sql.active_record` notifications (built into Rails)
+2. **Group** queries by call stack fingerprint
+3. **Fingerprint** SQL to detect same-shape queries with different bind values
+4. **Resolve** table names back to ActiveRecord models and associations
+5. **Suggest** the exact `.includes()` call to fix the N+1
+
+The middleware is designed to **never interfere with error propagation**. If your app raises an exception during a request, AndOne silently stops scanning and re-raises the original exception with its backtrace completely intact.
 
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
-
-## Code of Conduct
-
-Everyone interacting in the AndOne project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/and_one/blob/main/CODE_OF_CONDUCT.md).
