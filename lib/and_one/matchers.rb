@@ -23,7 +23,10 @@ module AndOne
           backtrace_cleaner: AndOne.backtrace_cleaner || AndOne.send(:default_backtrace_cleaner)
         )
         detail = formatter.format(detections)
-        msg = message || "Expected no N+1 queries, but #{detections.size} detected:\n#{detail}"
+        summary = detections.map { |d|
+          "#{d.count} queries to `#{d.table_name || 'unknown'}` (expected 1)"
+        }.join("; ")
+        msg = message || "Expected no N+1 queries, but #{detections.size} detected: #{summary}\n#{detail}"
         flunk(msg)
       end
     end
@@ -97,7 +100,10 @@ module AndOne
           backtrace_cleaner: AndOne.backtrace_cleaner || AndOne.send(:default_backtrace_cleaner)
         )
         detail = formatter.format(@detections)
-        "expected no N+1 queries, but #{@detections.size} detected:\n#{detail}"
+        summary = @detections.map { |d|
+          "#{d.count} queries to `#{d.table_name || 'unknown'}` (expected 1)"
+        }.join("; ")
+        "expected no N+1 queries, but #{@detections.size} detected: #{summary}\n#{detail}"
       end
 
       def description

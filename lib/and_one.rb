@@ -7,8 +7,9 @@ module AndOne
 
   class << self
     attr_accessor :enabled, :raise_on_detect, :backtrace_cleaner,
-                  :allow_stack_paths, :ignore_queries, :min_n_queries,
-                  :notifications_callback, :aggregate_mode, :ignore_file_path
+                  :allow_stack_paths, :ignore_queries, :ignore_callers,
+                  :min_n_queries, :notifications_callback, :aggregate_mode,
+                  :ignore_file_path
 
     def configure
       yield self
@@ -117,7 +118,8 @@ module AndOne
     def report(detections)
       # Filter out ignored detections
       detections = detections.reject do |d|
-        ignore_list.ignored?(d, d.raw_caller_strings)
+        ignore_list.ignored?(d, d.raw_caller_strings) ||
+          caller_ignored?(d.raw_caller_strings)
       end
 
       return if detections.empty?
@@ -136,6 +138,19 @@ module AndOne
 
       notifications_callback&.call(detections, message)
 
+      # GitHub Actions annotations
+      if ENV["GITHUB_ACTIONS"]
+        detections.each do |d|
+          file, line = parse_frame_location(d.fix_location || d.origin_frame)
+          query_count = "#{d.count} queries to `#{d.table_name || 'unknown'}`"
+          if file
+            $stdout.puts "::warning file=#{file},line=#{line || 1}::N+1 detected: #{query_count}. Add `.includes(:#{suggest_association_name(d)})` to fix."
+          else
+            $stdout.puts "::warning ::N+1 detected: #{query_count}."
+          end
+        end
+      end
+
       if raise_on_detect
         raise NPlus1Error, "\n#{message}"
       else
@@ -148,6 +163,37 @@ module AndOne
 
     def default_backtrace_cleaner
       defined?(Rails) && Rails.respond_to?(:backtrace_cleaner) ? Rails.backtrace_cleaner : nil
+    end
+
+    def caller_ignored?(raw_caller_strings)
+      patterns = ignore_callers
+      return false unless patterns&.any?
+
+      raw_caller_strings.any? do |frame|
+        patterns.any? { |pattern| pattern === frame }
+      end
+    end
+
+    def parse_frame_location(frame)
+      return [nil, nil] unless frame
+
+      # Extract file:line from a backtrace frame like "app/controllers/posts_controller.rb:15:in `index'"
+      clean = frame
+        .sub(%r{.*/app/}, "app/")
+        .sub(%r{.*/lib/}, "lib/")
+        .sub(%r{.*/test/}, "test/")
+        .sub(%r{.*/spec/}, "spec/")
+
+      if clean =~ /\A(.+?):(\d+)/
+        [$1, $2.to_i]
+      else
+        [clean, nil]
+      end
+    end
+
+    def suggest_association_name(detection)
+      suggestion = AssociationResolver.resolve(detection, detection.raw_caller_strings) rescue nil
+      suggestion&.association_name || detection.table_name || "association"
     end
 
     def resolve_ignore_file_path
@@ -171,6 +217,7 @@ require_relative "and_one/ignore_file"
 require_relative "and_one/aggregate"
 require_relative "and_one/matchers"
 require_relative "and_one/scan_helper"
+require_relative "and_one/dev_ui"
 require_relative "and_one/middleware"
 require_relative "and_one/active_job_hook"
 require_relative "and_one/sidekiq_middleware"

@@ -25,21 +25,21 @@
 
 - [x] **RSpec / Minitest matchers** — `assert_no_n_plus_one { ... }` / `assert_n_plus_one { ... }` for Minitest. `expect { ... }.not_to cause_n_plus_one` for RSpec. Matchers temporarily disable `raise_on_detect` internally so they work regardless of config.
 
-## 💡 Medium Value — Polish & Power User Features
+## ✅ Medium Value — Polish & Power User Features (Completed)
 
-- [ ] **`strict_loading` suggestion** — When an N+1 is detected, also suggest the `strict_loading` approach as an alternative: "You could also add `has_many :comments, strict_loading: true` to prevent this at the model level."
+- [x] **`strict_loading` suggestion** — When an N+1 is detected, also suggest the `strict_loading` approach as an alternative: "You could also add `has_many :comments, strict_loading: true` to prevent this at the model level."
 
-- [ ] **Query count in test failure messages** — "N+1 detected: 47 queries to `comments` (expected 1). Add `.includes(:comments)` to reduce to 1 query." Makes severity immediately obvious.
+- [x] **Query count in test failure messages** — "N+1 detected: 47 queries to `comments` (expected 1). Add `.includes(:comments)` to reduce to 1 query." Makes severity immediately obvious.
 
-- [ ] **Dev UI endpoint** — A tiny Rack endpoint (e.g., `/__and_one`) in development that shows all N+1s detected in the current server session with fix suggestions. Like a mini BetterErrors for N+1s.
+- [x] **Dev UI endpoint** — A tiny Rack endpoint (e.g., `/__and_one`) in development that shows all N+1s detected in the current server session with fix suggestions. Like a mini BetterErrors for N+1s.
 
-- [ ] **GitHub Actions / CI annotations** — When `GITHUB_ACTIONS` env var is set, output detections in `::warning file=...` format so they appear as annotations on the PR diff.
+- [x] **GitHub Actions / CI annotations** — When `GITHUB_ACTIONS` env var is set, output detections in `::warning file=...` format so they appear as annotations on the PR diff.
 
-- [ ] **Ignore by caller pattern** — In addition to `ignore_queries` (SQL patterns), support `ignore_callers` to suppress detections originating from specific paths: "ignore any N+1 from `app/views/admin/*`".
+- [x] **Ignore by caller pattern** — In addition to `ignore_queries` (SQL patterns), support `ignore_callers` to suppress detections originating from specific paths: "ignore any N+1 from `app/views/admin/*`".
 
-- [ ] **`has_many :through` and polymorphic support** — Extend the association resolver to handle `has_many :through` join chains and polymorphic associations, which are common sources of confusing N+1s.
+- [x] **`has_many :through` and polymorphic support** — Extend the association resolver to handle `has_many :through` join chains and polymorphic associations, which are common sources of confusing N+1s.
 
-- [ ] **`preload` vs `includes` vs `eager_load` recommendation** — Suggest the optimal loading strategy based on the query pattern (e.g., `eager_load` when there's a WHERE on the association).
+- [x] **`preload` vs `includes` vs `eager_load` recommendation** — Suggest the optimal loading strategy based on the query pattern (e.g., `eager_load` when there's a WHERE on the association).
 
 ## 🧪 Lower Priority — Nice to Have
 

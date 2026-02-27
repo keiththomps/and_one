@@ -80,6 +80,12 @@ module AndOne
       if suggestion&.actionable?
         lines << colorize("  💡 Suggestion:", :cyan, :bold)
         lines << colorize("    #{suggestion.fix_hint}", :green)
+        if suggestion.loading_strategy_hint
+          lines << colorize("    #{suggestion.loading_strategy_hint}", :green)
+        end
+        if suggestion.strict_loading_hint
+          lines << colorize("    #{suggestion.strict_loading_hint}", :dim)
+        end
       end
 
       # Ignore hint

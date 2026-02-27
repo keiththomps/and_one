@@ -67,4 +67,16 @@ class TestFormatter < Minitest::Test
     # Should suggest the fix
     assert_includes output, "includes(:comments)"
   end
+
+  def test_includes_strict_loading_hint
+    detections = AndOne.scan do
+      Post.all.each { |post| post.comments.to_a }
+    end
+
+    formatter = AndOne::Formatter.new
+    output = formatter.format(detections)
+
+    assert_includes output, "strict_loading: true"
+    assert_includes output, "has_many :comments"
+  end
 end

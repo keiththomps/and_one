@@ -63,6 +63,7 @@ module AndOneTestHelper
     AndOne.raise_on_detect = false
     AndOne.allow_stack_paths = []
     AndOne.ignore_queries = []
+    AndOne.ignore_callers = []
     AndOne.min_n_queries = 2
     AndOne.notifications_callback = nil
     AndOne.aggregate_mode = false

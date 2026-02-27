@@ -91,4 +91,15 @@ class TestMinitestHelper < Minitest::Test
 
     assert_equal original_callback, AndOne.notifications_callback
   end
+
+  def test_failure_message_includes_query_count
+    error = assert_raises(Minitest::Assertion) do
+      assert_no_n_plus_one do
+        Post.all.each { |post| post.comments.to_a }
+      end
+    end
+
+    # Should include query count like "X queries to `comments` (expected 1)"
+    assert_match(/\d+ queries to `comments` \(expected 1\)/, error.message)
+  end
 end
