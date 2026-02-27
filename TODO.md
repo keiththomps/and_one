@@ -15,15 +15,15 @@
 - [x] `ScanHelper` shared module to DRY up scan lifecycle across entry points
 - [x] Double-scan protection (ActiveJob + Sidekiq don't conflict)
 
-## 🎯 High Value — Would Meaningfully Improve DX
+## 🎯 High Value — Completed
 
-- [ ] **Auto-detect the "fix location"** — Walk the backtrace to find the nearest `ActiveRecord::Relation` call (`.all`, `.where`, `.find_each`) and point directly to the line that should get `.includes()` added. More actionable than just showing the full stack.
+- [x] **Auto-detect the "fix location"** — Walks the backtrace to identify two key frames: the "origin" (where the N+1 is triggered inside a loop) and the "fix location" (the outer frame where `.includes()` should be added). Both are highlighted in the output.
 
-- [ ] **Allowlist file (`.and_one_ignore`)** — A YAML or plain-text file in the project root where teams can permanently silence known N+1s they've chosen to accept. Checked into source control. Avoids littering code with `AndOne.pause` blocks.
+- [x] **Ignore file (`.and_one_ignore`)** — Supports four rule types: `gem:` (for N+1s from gems like devise/administrate you can't fix), `path:` (glob patterns for app areas), `query:` (SQL patterns), and `fingerprint:` (specific detections). Checked into source control.
 
-- [ ] **Aggregate mode for development** — Instead of warning on every request, collect unique N+1 fingerprints per session and show a summary. "You have 3 unique N+1 patterns. Run `rails and_one:report` to see them." Prevents log spam when you're working on unrelated code.
+- [x] **Aggregate mode for development** — `AndOne.aggregate_mode = true` reports each unique N+1 only once per server session. Tracks occurrence counts. `AndOne.aggregate.summary` shows a session overview. Thread-safe.
 
-- [ ] **RSpec / Minitest matchers** — `expect { ... }.not_to cause_n_plus_one` and `assert_no_n_plus_one { ... }`. More ergonomic than manually inspecting `AndOne.scan` return values.
+- [x] **RSpec / Minitest matchers** — `assert_no_n_plus_one { ... }` / `assert_n_plus_one { ... }` for Minitest. `expect { ... }.not_to cause_n_plus_one` for RSpec. Matchers temporarily disable `raise_on_detect` internally so they work regardless of config.
 
 ## 💡 Medium Value — Polish & Power User Features
 

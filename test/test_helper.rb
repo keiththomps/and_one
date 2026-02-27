@@ -65,6 +65,10 @@ module AndOneTestHelper
     AndOne.ignore_queries = []
     AndOne.min_n_queries = 2
     AndOne.notifications_callback = nil
+    AndOne.aggregate_mode = false
+    AndOne.ignore_file_path = nil
+    AndOne.reload_ignore_file!
+    AndOne.instance_variable_set(:@aggregate, nil)
 
     # Clear any leftover thread state
     Thread.current[:and_one_detector] = nil

@@ -6,6 +6,7 @@ module AndOne
     COLORS = {
       red: "\e[91m",
       yellow: "\e[93m",
+      green: "\e[92m",
       cyan: "\e[96m",
       dim: "\e[2m",
       bold: "\e[1m",
@@ -21,9 +22,9 @@ module AndOne
     def format(detections)
       parts = []
       parts << ""
-      parts << colorize("#{SEPARATOR}", :red)
+      parts << colorize(SEPARATOR, :red)
       parts << colorize(" 🏀 And One! #{detections.size} N+1 quer#{detections.size == 1 ? 'y' : 'ies'} detected", :red, :bold)
-      parts << colorize("#{SEPARATOR}", :red)
+      parts << colorize(SEPARATOR, :red)
 
       detections.each_with_index do |detection, i|
         parts << ""
@@ -39,10 +40,11 @@ module AndOne
 
     def format_detection(detection, index)
       lines = []
-      cleaned_bt = clean_backtrace(detection.caller_locations.map(&:to_s))
+      cleaned_bt = clean_backtrace(detection.raw_caller_strings)
 
-      # Header
+      # Header with count and fingerprint
       lines << colorize("  #{index}) #{detection.count}x repeated query on `#{detection.table_name || 'unknown'}`", :yellow, :bold)
+      lines << colorize("     fingerprint: #{detection.fingerprint}", :dim)
       lines << ""
 
       # Sample query
@@ -50,33 +52,47 @@ module AndOne
       lines << colorize("    #{truncate_query(detection.sample_query)}", :dim)
       lines << ""
 
-      # Call site
-      lines << colorize("  Call stack:", :cyan)
-      cleaned_bt.first(8).each_with_index do |frame, fi|
-        prefix = fi == 0 ? "  → " : "    "
-        color = fi == 0 ? :yellow : :dim
-        lines << colorize("#{prefix}#{frame}", color)
+      # Origin — where the N+1 is triggered
+      if detection.origin_frame
+        lines << colorize("  Origin (where the N+1 is triggered):", :cyan)
+        lines << colorize("  → #{format_frame(detection.origin_frame)}", :yellow)
+        lines << ""
       end
-      lines << colorize("    ... (#{cleaned_bt.size - 8} more frames)", :dim) if cleaned_bt.size > 8
 
-      # Try to resolve association and suggest fix
+      # Fix location — where to add .includes
+      if detection.fix_location && detection.fix_location != detection.origin_frame
+        lines << colorize("  Fix here (where to add .includes):", :cyan)
+        lines << colorize("  ⇒ #{format_frame(detection.fix_location)}", :green)
+        lines << ""
+      end
+
+      # Abbreviated call stack
+      lines << colorize("  Call stack:", :cyan)
+      cleaned_bt.first(6).each_with_index do |frame, fi|
+        prefix = fi == 0 ? "    " : "    "
+        lines << colorize("#{prefix}#{frame}", :dim)
+      end
+      lines << colorize("    ... (#{cleaned_bt.size - 6} more frames)", :dim) if cleaned_bt.size > 6
+      lines << ""
+
+      # Association suggestion
       suggestion = resolve_suggestion(detection, cleaned_bt)
       if suggestion&.actionable?
-        lines << ""
-        lines << colorize("  💡 Fix:", :cyan, :bold)
-        lines << colorize("    #{suggestion.fix_hint}", :yellow)
-        if suggestion.origin_frame
-          lines << colorize("    at #{suggestion.origin_frame}", :dim)
-        end
+        lines << colorize("  💡 Suggestion:", :cyan, :bold)
+        lines << colorize("    #{suggestion.fix_hint}", :green)
       end
+
+      # Ignore hint
+      lines << ""
+      lines << colorize("  To ignore, add to .and_one_ignore:", :dim)
+      lines << colorize("    fingerprint:#{detection.fingerprint}", :dim)
 
       lines.join("\n")
     end
 
     def resolve_suggestion(detection, cleaned_backtrace)
       AssociationResolver.resolve(detection, cleaned_backtrace)
-    rescue => e
-      # Never let suggestion resolution break the output
+    rescue
       nil
     end
 
@@ -86,6 +102,15 @@ module AndOne
       else
         backtrace
       end
+    end
+
+    def format_frame(frame)
+      # Strip common prefixes for readability
+      frame
+        .sub(%r{.*/app/}, "app/")
+        .sub(%r{.*/lib/}, "lib/")
+        .sub(%r{.*/test/}, "test/")
+        .sub(%r{.*/spec/}, "spec/")
     end
 
     def truncate_query(sql, max_length: 200)

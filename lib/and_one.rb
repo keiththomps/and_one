@@ -8,7 +8,7 @@ module AndOne
   class << self
     attr_accessor :enabled, :raise_on_detect, :backtrace_cleaner,
                   :allow_stack_paths, :ignore_queries, :min_n_queries,
-                  :notifications_callback
+                  :notifications_callback, :aggregate_mode, :ignore_file_path
 
     def configure
       yield self
@@ -77,6 +77,19 @@ module AndOne
       !!thread_state[:and_one_paused]
     end
 
+    def aggregate
+      @aggregate ||= Aggregate.new
+    end
+
+    def ignore_list
+      @ignore_list ||= IgnoreFile.new(resolve_ignore_file_path)
+    end
+
+    # Reset cached ignore file (useful after config change)
+    def reload_ignore_file!
+      @ignore_list = nil
+    end
+
     private
 
     def start_scan
@@ -102,6 +115,19 @@ module AndOne
     end
 
     def report(detections)
+      # Filter out ignored detections
+      detections = detections.reject do |d|
+        ignore_list.ignored?(d, d.raw_caller_strings)
+      end
+
+      return if detections.empty?
+
+      # In aggregate mode, only report NEW unique detections
+      if aggregate_mode
+        detections = detections.select { |d| aggregate.record(d) }
+        return if detections.empty?
+      end
+
       formatter = Formatter.new(
         backtrace_cleaner: backtrace_cleaner || default_backtrace_cleaner
       )
@@ -123,6 +149,16 @@ module AndOne
     def default_backtrace_cleaner
       defined?(Rails) && Rails.respond_to?(:backtrace_cleaner) ? Rails.backtrace_cleaner : nil
     end
+
+    def resolve_ignore_file_path
+      return ignore_file_path if ignore_file_path
+
+      if defined?(Rails) && Rails.respond_to?(:root) && Rails.root
+        Rails.root.join(".and_one_ignore").to_s
+      else
+        File.join(Dir.pwd, ".and_one_ignore")
+      end
+    end
   end
 end
 
@@ -131,6 +167,9 @@ require_relative "and_one/detector"
 require_relative "and_one/fingerprint"
 require_relative "and_one/formatter"
 require_relative "and_one/association_resolver"
+require_relative "and_one/ignore_file"
+require_relative "and_one/aggregate"
+require_relative "and_one/matchers"
 require_relative "and_one/scan_helper"
 require_relative "and_one/middleware"
 require_relative "and_one/active_job_hook"
