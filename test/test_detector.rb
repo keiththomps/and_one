@@ -38,7 +38,7 @@ class TestDetector < Minitest::Test
 
   def test_detects_n_plus_one_on_belongs_to
     detections = AndOne.scan do
-      Post.all.each { |post| post.author }
+      Post.all.each(&:author)
     end
 
     assert_equal 1, detections.size
@@ -47,7 +47,7 @@ class TestDetector < Minitest::Test
 
   def test_no_detection_with_preload
     detections = AndOne.scan do
-      Post.preload(:author).each { |post| post.author }
+      Post.preload(:author).each(&:author)
     end
 
     assert_empty detections
@@ -82,7 +82,7 @@ class TestDetector < Minitest::Test
 
       AndOne.pause do
         # This should NOT be detected
-        Post.limit(3).each { |post| post.author }
+        Post.limit(3).each(&:author)
       end
     end
 

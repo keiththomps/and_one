@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e
+
+# Get staged Ruby files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.rb$' || true)
+
+if [ -n "$STAGED_FILES" ]; then
+  echo "Running RuboCop on staged files..."
+  bundle exec rubocop --force-exclusion $STAGED_FILES
+fi

@@ -13,6 +13,8 @@
 
 require "and_one"
 
-RSpec.configure do |config|
-  config.include AndOne::RSpecHelper
-end if defined?(RSpec)
+if defined?(RSpec)
+  RSpec.configure do |config|
+    config.include AndOne::RSpecHelper
+  end
+end

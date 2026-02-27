@@ -33,19 +33,19 @@ module AndOne
 
       start_scan
 
-      if block_given?
-        begin
-          yield
-          detections = detector.finish
-          stop_scan
-          report(detections) if detections.any?
-          detections
-        rescue Exception => e
-          # On error, clean up without reporting — don't add noise to real errors
-          detector&.send(:unsubscribe)
-          stop_scan
-          raise
-        end
+      return unless block_given?
+
+      begin
+        yield
+        detections = detector.finish
+        stop_scan
+        report(detections) if detections.any?
+        detections
+      rescue Exception # rubocop:disable Lint/RescueException
+        # On error, clean up without reporting — don't add noise to real errors
+        detector&.send(:unsubscribe)
+        stop_scan
+        raise
       end
     end
 
@@ -133,7 +133,7 @@ module AndOne
       if defined?(Rails) && Rails.respond_to?(:env)
         Rails.env.to_s
       else
-        ENV["RAILS_ENV"] || ENV["RACK_ENV"]
+        ENV["RAILS_ENV"] || ENV.fetch("RACK_ENV", nil)
       end
     end
 
@@ -150,7 +150,7 @@ module AndOne
       Thread.current
     end
 
-    def report(detections)
+    def report(detections) # rubocop:disable Metrics
       # Filter out ignored detections
       detections = detections.reject do |d|
         ignore_list.ignored?(d, d.raw_caller_strings) ||
@@ -181,7 +181,7 @@ module AndOne
           if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
             Rails.logger.warn(json_output)
           else
-            $stderr.puts(json_output)
+            warn(json_output)
           end
         end
 
@@ -191,7 +191,7 @@ module AndOne
         if ENV["GITHUB_ACTIONS"]
           detections.each do |d|
             file, line = parse_frame_location(d.fix_location || d.origin_frame)
-            query_count = "#{d.count} queries to `#{d.table_name || 'unknown'}`"
+            query_count = "#{d.count} queries to `#{d.table_name || "unknown"}`"
             if file
               $stdout.puts "::warning file=#{file},line=#{line || 1}::N+1 detected: #{query_count}. Add `.includes(:#{suggest_association_name(d)})` to fix."
             else
@@ -200,15 +200,11 @@ module AndOne
           end
         end
 
-        if raise_on_detect
-          raise NPlus1Error, "\n#{message}"
-        else
-          unless json_logging
-            if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
-              Rails.logger.warn("\n#{message}")
-            end
-            $stderr.puts("\n#{message}") if $stderr.tty?
-          end
+        raise NPlus1Error, "\n#{message}" if raise_on_detect
+
+        unless json_logging
+          Rails.logger.warn("\n#{message}") if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
+          warn("\n#{message}") if $stderr.tty?
         end
       end
     end
@@ -222,7 +218,7 @@ module AndOne
       return false unless patterns&.any?
 
       raw_caller_strings.any? do |frame|
-        patterns.any? { |pattern| pattern === frame }
+        patterns.any? { |pattern| pattern.match?(frame) }
       end
     end
 
@@ -231,20 +227,24 @@ module AndOne
 
       # Extract file:line from a backtrace frame like "app/controllers/posts_controller.rb:15:in `index'"
       clean = frame
-        .sub(%r{.*/app/}, "app/")
-        .sub(%r{.*/lib/}, "lib/")
-        .sub(%r{.*/test/}, "test/")
-        .sub(%r{.*/spec/}, "spec/")
+              .sub(%r{.*/app/}, "app/")
+              .sub(%r{.*/lib/}, "lib/")
+              .sub(%r{.*/test/}, "test/")
+              .sub(%r{.*/spec/}, "spec/")
 
       if clean =~ /\A(.+?):(\d+)/
-        [$1, $2.to_i]
+        [::Regexp.last_match(1), ::Regexp.last_match(2).to_i]
       else
         [clean, nil]
       end
     end
 
     def suggest_association_name(detection)
-      suggestion = AssociationResolver.resolve(detection, detection.raw_caller_strings) rescue nil
+      suggestion = begin
+        AssociationResolver.resolve(detection, detection.raw_caller_strings)
+      rescue StandardError
+        nil
+      end
       suggestion&.association_name || detection.table_name || "association"
     end
 

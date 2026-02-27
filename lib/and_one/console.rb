@@ -49,7 +49,7 @@ module AndOne
 
       def finish_scan
         AndOne.finish if AndOne.scanning?
-      rescue
+      rescue StandardError
         # Don't let cleanup errors interrupt the console
         nil
       end
@@ -79,9 +79,9 @@ module AndOne
 
         # IRB in Rails 7.1+ uses IRB::Context#evaluate with hooks
         # We hook into the SIGINT-safe eval output via an around_eval approach
-        if defined?(::IRB::Context)
-          ::IRB::Context.prepend(IrbContextPatch)
-        end
+        return unless defined?(::IRB::Context)
+
+        ::IRB::Context.prepend(IrbContextPatch)
       end
 
       def remove_irb_hook
@@ -94,15 +94,13 @@ module AndOne
 
         @pry_hook_installed = true
 
-        ::Pry.hooks.add_hook(:after_eval, :and_one_console) do |result, _pry|
+        ::Pry.hooks.add_hook(:after_eval, :and_one_console) do |_result, _pry|
           AndOne::Console.send(:cycle_scan) if AndOne::Console.active?
         end
       end
 
       def remove_pry_hook
-        if defined?(::Pry) && ::Pry.hooks
-          ::Pry.hooks.delete_hook(:after_eval, :and_one_console)
-        end
+        ::Pry.hooks.delete_hook(:after_eval, :and_one_console) if defined?(::Pry) && ::Pry.hooks
         @pry_hook_installed = false
       end
 
@@ -119,7 +117,7 @@ module AndOne
         result = super
         AndOne::Console.send(:cycle_scan) if AndOne::Console.active?
         result
-      rescue => e
+      rescue StandardError
         AndOne::Console.send(:cycle_scan) if AndOne::Console.active?
         raise
       end

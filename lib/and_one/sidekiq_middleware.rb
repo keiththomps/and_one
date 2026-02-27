@@ -19,8 +19,8 @@ module AndOne
   class SidekiqMiddleware
     include ScanHelper
 
-    def call(_worker, _msg, _queue)
-      and_one_wrap { yield }
+    def call(_worker, _msg, _queue, &)
+      and_one_wrap(&)
     end
   end
 end

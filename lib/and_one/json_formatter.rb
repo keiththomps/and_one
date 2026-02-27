@@ -69,7 +69,7 @@ module AndOne
 
     def resolve_suggestion(detection)
       AssociationResolver.resolve(detection, detection.raw_caller_strings)
-    rescue
+    rescue StandardError
       nil
     end
 

@@ -55,9 +55,9 @@ module AndOne
     private
 
     def extract_table_name(sql)
-      if sql =~ /\bFROM\s+["`]?(\w+)["`]?/i
-        $1
-      end
+      return unless sql =~ /\bFROM\s+["`]?(\w+)["`]?/i
+
+      ::Regexp.last_match(1)
     end
 
     def find_origin_frame

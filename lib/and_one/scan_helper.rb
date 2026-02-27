@@ -15,7 +15,7 @@ module AndOne
         result = yield
         AndOne.finish
         result
-      rescue Exception
+      rescue Exception # rubocop:disable Lint/RescueException
         and_one_quietly_stop
         raise
       end
@@ -25,7 +25,7 @@ module AndOne
       Thread.current[:and_one_detector]&.send(:unsubscribe)
       Thread.current[:and_one_detector] = nil
       Thread.current[:and_one_paused] = false
-    rescue
+    rescue StandardError
       nil
     end
   end

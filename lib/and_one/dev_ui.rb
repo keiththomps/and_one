@@ -28,7 +28,7 @@ module AndOne
 
     private
 
-    def serve_dashboard(env)
+    def serve_dashboard(_env)
       entries = AndOne.aggregate_mode ? AndOne.aggregate.detections : {}
 
       html = render_html(entries)
@@ -37,49 +37,49 @@ module AndOne
 
     def render_html(entries)
       rows = if entries.empty?
-        <<~HTML
-          <tr>
-            <td colspan="6" class="empty">
-              No N+1 queries detected yet.
-              #{AndOne.aggregate_mode ? "" : "<br><strong>Tip:</strong> Set <code>AndOne.aggregate_mode = true</code> to collect detections across requests."}
-            </td>
-          </tr>
-        HTML
-      else
-        entries.map.with_index do |(fp, entry), i|
-          det = entry.detection
-          suggestion = begin
-            AndOne::AssociationResolver.resolve(det, det.raw_caller_strings)
-          rescue
-            nil
-          end
-          fix = suggestion&.actionable? ? h(suggestion.fix_hint) : "—"
-          strict_hint = suggestion&.strict_loading_hint ? h(suggestion.strict_loading_hint) : ""
-          loading_hint = suggestion&.loading_strategy_hint ? h(suggestion.loading_strategy_hint) : ""
+               <<~HTML
+                 <tr>
+                   <td colspan="6" class="empty">
+                     No N+1 queries detected yet.
+                     #{"<br><strong>Tip:</strong> Set <code>AndOne.aggregate_mode = true</code> to collect detections across requests." unless AndOne.aggregate_mode}
+                   </td>
+                 </tr>
+               HTML
+             else
+               entries.map.with_index do |(fp, entry), i|
+                 det = entry.detection
+                 suggestion = begin
+                   AndOne::AssociationResolver.resolve(det, det.raw_caller_strings)
+                 rescue StandardError
+                   nil
+                 end
+                 fix = suggestion&.actionable? ? h(suggestion.fix_hint) : "—"
+                 strict_hint = suggestion&.strict_loading_hint ? h(suggestion.strict_loading_hint) : ""
+                 loading_hint = suggestion&.loading_strategy_hint ? h(suggestion.loading_strategy_hint) : ""
 
-          origin = det.origin_frame ? format_frame(det.origin_frame) : "—"
-          fix_loc = det.fix_location ? format_frame(det.fix_location) : "—"
+                 origin = det.origin_frame ? format_frame(det.origin_frame) : "—"
+                 fix_loc = det.fix_location ? format_frame(det.fix_location) : "—"
 
-          <<~HTML
-            <tr>
-              <td>#{i + 1}</td>
-              <td><code>#{h(det.table_name || 'unknown')}</code></td>
-              <td>#{entry.occurrences}</td>
-              <td><code class="sql">#{h(truncate(det.sample_query, 200))}</code></td>
-              <td>
-                <div class="origin">#{h(origin)}</div>
-                <div class="fix-loc">⇒ #{h(fix_loc)}</div>
-              </td>
-              <td>
-                <div class="suggestion">#{fix}</div>
-                #{"<div class=\"strategy\">#{loading_hint}</div>" unless loading_hint.empty?}
-                #{"<div class=\"strict\">#{strict_hint}</div>" unless strict_hint.empty?}
-                <div class="fingerprint">#{h(fp)}</div>
-              </td>
-            </tr>
-          HTML
-        end.join
-      end
+                 <<~HTML
+                   <tr>
+                     <td>#{i + 1}</td>
+                     <td><code>#{h(det.table_name || "unknown")}</code></td>
+                     <td>#{entry.occurrences}</td>
+                     <td><code class="sql">#{h(truncate(det.sample_query, 200))}</code></td>
+                     <td>
+                       <div class="origin">#{h(origin)}</div>
+                       <div class="fix-loc">⇒ #{h(fix_loc)}</div>
+                     </td>
+                     <td>
+                       <div class="suggestion">#{fix}</div>
+                       #{"<div class=\"strategy\">#{loading_hint}</div>" unless loading_hint.empty?}
+                       #{"<div class=\"strict\">#{strict_hint}</div>" unless strict_hint.empty?}
+                       <div class="fingerprint">#{h(fp)}</div>
+                     </td>
+                   </tr>
+                 HTML
+               end.join
+             end
 
       <<~HTML
         <!DOCTYPE html>
@@ -114,7 +114,7 @@ module AndOne
         </head>
         <body>
           <h1>🏀 AndOne — N+1 Dashboard</h1>
-          <p class="subtitle">#{entries.size} unique N+1 pattern#{'s' if entries.size != 1} detected this session</p>
+          <p class="subtitle">#{entries.size} unique N+1 pattern#{"s" if entries.size != 1} detected this session</p>
           <div class="actions">
             <a href="#{MOUNT_PATH}">↻ Refresh</a>
           </div>
@@ -140,14 +140,15 @@ module AndOne
 
     def h(text)
       text.to_s
-        .gsub("&", "&amp;")
-        .gsub("<", "&lt;")
-        .gsub(">", "&gt;")
-        .gsub('"', "&quot;")
+          .gsub("&", "&amp;")
+          .gsub("<", "&lt;")
+          .gsub(">", "&gt;")
+          .gsub('"', "&quot;")
     end
 
     def truncate(text, max)
       return text if text.length <= max
+
       "#{text[0...max]}..."
     end
 

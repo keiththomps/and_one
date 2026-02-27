@@ -23,7 +23,7 @@ module AndOne
   #   fingerprint:abc123def456
   #
   class IgnoreFile
-    Rule = Struct.new(:type, :pattern, keyword_init: true)
+    Rule = Struct.new(:type, :pattern)
 
     attr_reader :rules
 
@@ -90,8 +90,8 @@ module AndOne
     def matches_path?(glob, raw_caller_strings)
       # Convert glob to regex: * -> [^/]*, ** -> .*
       regex_str = Regexp.escape(glob)
-                        .gsub('\*\*', '.*')
-                        .gsub('\*', '[^/]*')
+                        .gsub('\*\*', ".*")
+                        .gsub('\*', "[^/]*")
       regex = Regexp.new(regex_str)
       raw_caller_strings.any? { |frame| frame.match?(regex) }
     end

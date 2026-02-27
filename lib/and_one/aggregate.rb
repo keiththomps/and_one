@@ -14,7 +14,7 @@ module AndOne
   #   AndOne.aggregate.reset!
   #
   class Aggregate
-    Entry = Struct.new(:detection, :occurrences, :first_seen_at, :last_seen_at, keyword_init: true)
+    Entry = Struct.new(:detection, :occurrences, :first_seen_at, :last_seen_at)
 
     def initialize
       @mutex = Mutex.new
@@ -65,19 +65,19 @@ module AndOne
 
         lines = []
         lines << ""
-        lines << "🏀 AndOne Session Summary: #{@entries.size} unique N+1 pattern#{'s' if @entries.size != 1}"
-        lines << "─" * 60
+        lines << "🏀 AndOne Session Summary: #{@entries.size} unique N+1 pattern#{"s" if @entries.size != 1}"
+        lines << ("─" * 60)
 
         @entries.each_with_index do |(fp, entry), i|
           det = entry.detection
-          lines << "  #{i + 1}) #{det.table_name || 'unknown'} — #{entry.occurrences} occurrence#{'s' if entry.occurrences != 1}"
+          lines << "  #{i + 1}) #{det.table_name || "unknown"} — #{entry.occurrences} occurrence#{"s" if entry.occurrences != 1}"
           lines << "     #{det.sample_query[0, 120]}"
           lines << "     origin: #{det.origin_frame}" if det.origin_frame
           lines << "     fingerprint: #{fp}"
           lines << ""
         end
 
-        lines << "─" * 60
+        lines << ("─" * 60)
         lines.join("\n")
       end
     end

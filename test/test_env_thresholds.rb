@@ -8,8 +8,8 @@ class TestEnvThresholds < Minitest::Test
   def setup
     super
     seed_data!
-    @original_rails_env = ENV["RAILS_ENV"]
-    @original_rack_env = ENV["RACK_ENV"]
+    @original_rails_env = ENV.fetch("RAILS_ENV", nil)
+    @original_rack_env = ENV.fetch("RACK_ENV", nil)
   end
 
   def teardown

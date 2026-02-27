@@ -80,7 +80,7 @@ class TestThreadSafety < Minitest::Test
     threads = count.times.map do |i|
       Thread.new(i) do |idx|
         block.call(idx, errors)
-      rescue => e
+      rescue StandardError => e
         errors << "Thread #{idx}: #{e.class}: #{e.message}\n#{e.backtrace.first(3).join("\n")}"
       end
     end
@@ -97,14 +97,10 @@ class TestThreadSafety < Minitest::Test
           Post.all.each { |post| post.comments.to_a }
         end
 
-        unless detections.is_a?(Array) && detections.size >= 1
-          errs << "Thread #{idx}: expected detections, got #{detections.inspect}"
-        end
+        errs << "Thread #{idx}: expected detections, got #{detections.inspect}" unless detections.is_a?(Array) && detections.size >= 1
 
         tables = detections.map(&:table_name)
-        unless tables.include?("comments")
-          errs << "Thread #{idx}: expected 'comments' table, got #{tables.inspect}"
-        end
+        errs << "Thread #{idx}: expected 'comments' table, got #{tables.inspect}" unless tables.include?("comments")
       end
     end
 
@@ -122,19 +118,15 @@ class TestThreadSafety < Minitest::Test
         sleep 0.05
         Post.all.each { |post| post.comments.to_a }
       end
-    rescue => e
+    rescue StandardError => e
       errors << "Thread A: #{e.class}: #{e.message}"
     end
 
     thread_b = Thread.new do
       barrier.pop
-      if AndOne.scanning?
-        errors << "Thread B: scanning? returned true, but only Thread A should be scanning"
-      end
-      if AndOne.paused?
-        errors << "Thread B: paused? leaked from another thread"
-      end
-    rescue => e
+      errors << "Thread B: scanning? returned true, but only Thread A should be scanning" if AndOne.scanning?
+      errors << "Thread B: paused? leaked from another thread" if AndOne.paused?
+    rescue StandardError => e
       errors << "Thread B: #{e.class}: #{e.message}"
     end
 
@@ -154,19 +146,17 @@ class TestThreadSafety < Minitest::Test
         sleep 0.05
         AndOne.resume
       end
-    rescue => e
+    rescue StandardError => e
       errors << "Thread A: #{e.class}: #{e.message}"
     end
 
     thread_b = Thread.new do
       barrier.pop
       AndOne.scan do
-        if AndOne.paused?
-          errors << "Thread B: paused? leaked from Thread A"
-        end
+        errors << "Thread B: paused? leaked from Thread A" if AndOne.paused?
         Post.all.each { |post| post.comments.to_a }
       end
-    rescue => e
+    rescue StandardError => e
       errors << "Thread B: #{e.class}: #{e.message}"
     end
 
@@ -181,16 +171,12 @@ class TestThreadSafety < Minitest::Test
         detections = AndOne.scan do
           Post.all.each { |post| post.comments.to_a }
         end
-        unless detections.size >= 1
-          errs << "Thread #{idx} (N+1): expected detections, got #{detections.size}"
-        end
+        errs << "Thread #{idx} (N+1): expected detections, got #{detections.size}" unless detections.size >= 1
       else
         detections = AndOne.scan do
           Post.includes(:comments).each { |post| post.comments.to_a }
         end
-        unless detections.empty?
-          errs << "Thread #{idx} (clean): expected 0 detections, got #{detections.size}: #{detections.map(&:table_name)}"
-        end
+        errs << "Thread #{idx} (clean): expected 0 detections, got #{detections.size}: #{detections.map(&:table_name)}" unless detections.empty?
       end
     end
 
@@ -202,7 +188,7 @@ class TestThreadSafety < Minitest::Test
   def test_aggregate_mode_under_concurrency
     AndOne.aggregate_mode = true
 
-    errors = run_threads do |idx, errs|
+    errors = run_threads do |_idx, _errs|
       ITERATIONS.times do
         AndOne.scan do
           Post.all.each { |post| post.comments.to_a }
@@ -218,7 +204,7 @@ class TestThreadSafety < Minitest::Test
     total = agg.detections.values.sum(&:occurrences)
     expected = THREAD_COUNT * ITERATIONS
     assert_equal expected, total,
-      "Expected #{expected} total occurrences, got #{total}"
+                 "Expected #{expected} total occurrences, got #{total}"
   end
 
   # Verify aggregate.record is atomic — concurrent record calls should
@@ -244,7 +230,7 @@ class TestThreadSafety < Minitest::Test
     entry = aggregate.detections.values.first
     expected = THREAD_COUNT * record_count
     assert_equal expected, entry.occurrences,
-      "Expected #{expected} occurrences, got #{entry.occurrences} (lost updates!)"
+                 "Expected #{expected} occurrences, got #{entry.occurrences} (lost updates!)"
   end
 
   # Verify that notifications_callback is called safely from concurrent threads.
@@ -252,11 +238,11 @@ class TestThreadSafety < Minitest::Test
     mutex = Mutex.new
     callback_calls = []
 
-    AndOne.notifications_callback = ->(dets, msg) do
+    AndOne.notifications_callback = lambda { |_dets, _msg|
       mutex.synchronize { callback_calls << Thread.current.object_id }
-    end
+    }
 
-    errors = run_threads do |idx, errs|
+    errors = run_threads do |_idx, _errs|
       AndOne.scan do
         Post.all.each { |post| post.comments.to_a }
       end
@@ -265,16 +251,16 @@ class TestThreadSafety < Minitest::Test
     assert errors.empty?, "Callback errors:\n#{errors.join("\n")}"
 
     assert_equal THREAD_COUNT, callback_calls.size,
-      "Expected #{THREAD_COUNT} callback calls, got #{callback_calls.size}"
+                 "Expected #{THREAD_COUNT} callback calls, got #{callback_calls.size}"
 
     unique_threads = callback_calls.uniq.size
     assert unique_threads > 1,
-      "Expected callbacks from multiple threads, got #{unique_threads} unique"
+           "Expected callbacks from multiple threads, got #{unique_threads} unique"
   end
 
   # Stress test: rapid start/finish cycles across threads.
   def test_rapid_scan_lifecycle
-    errors = run_threads do |idx, errs|
+    errors = run_threads do |_idx, _errs|
       (ITERATIONS * 3).times do
         AndOne.scan do
           Post.first
@@ -300,9 +286,7 @@ class TestThreadSafety < Minitest::Test
       rescue RuntimeError
         # Expected
       end
-      if AndOne.scanning?
-        errors << "Thread A: still scanning after error"
-      end
+      errors << "Thread A: still scanning after error" if AndOne.scanning?
     end
 
     thread_b = Thread.new do
@@ -313,10 +297,8 @@ class TestThreadSafety < Minitest::Test
         Post.all.each { |post| post.comments.to_a }
       end
 
-      unless detections.is_a?(Array) && detections.size >= 1
-        errors << "Thread B: scanning failed after Thread A's error"
-      end
-    rescue => e
+      errors << "Thread B: scanning failed after Thread A's error" unless detections.is_a?(Array) && detections.size >= 1
+    rescue StandardError => e
       errors << "Thread B: #{e.class}: #{e.message}"
     end
 
@@ -329,9 +311,7 @@ class TestThreadSafety < Minitest::Test
     errors = run_threads do |idx, errs|
       ITERATIONS.times do
         list = AndOne.ignore_list
-        unless list.is_a?(AndOne::IgnoreFile)
-          errs << "Thread #{idx}: got #{list.class} instead of IgnoreFile"
-        end
+        errs << "Thread #{idx}: got #{list.class} instead of IgnoreFile" unless list.is_a?(AndOne::IgnoreFile)
       end
     end
 
@@ -341,21 +321,15 @@ class TestThreadSafety < Minitest::Test
   # Verify AssociationResolver's table_model_cache is thread-safe.
   def test_association_resolver_cache_under_concurrency
     # Clear any existing cache
-    if AndOne::AssociationResolver.instance_variable_defined?(:@table_model_cache)
-      AndOne::AssociationResolver.instance_variable_set(:@table_model_cache, {})
-    end
+    AndOne::AssociationResolver.instance_variable_set(:@table_model_cache, {}) if AndOne::AssociationResolver.instance_variable_defined?(:@table_model_cache)
 
     errors = run_threads do |idx, errs|
       ITERATIONS.times do
         model = AndOne::AssociationResolver.model_for_table("comments")
-        unless model == Comment
-          errs << "Thread #{idx}: expected Comment, got #{model.inspect}"
-        end
+        errs << "Thread #{idx}: expected Comment, got #{model.inspect}" unless model == Comment
 
         model2 = AndOne::AssociationResolver.model_for_table("posts")
-        unless model2 == Post
-          errs << "Thread #{idx}: expected Post, got #{model2.inspect}"
-        end
+        errs << "Thread #{idx}: expected Post, got #{model2.inspect}" unless model2 == Post
       end
     end
 
@@ -364,7 +338,7 @@ class TestThreadSafety < Minitest::Test
 
   # Simulate Puma-like request handling: middleware wrapping concurrent requests.
   def test_simulated_puma_requests
-    middleware = AndOne::Middleware.new(->(env) {
+    middleware = AndOne::Middleware.new(lambda { |env|
       if env["n_plus_one"]
         Post.all.each { |post| post.comments.to_a }
       else
@@ -376,10 +350,8 @@ class TestThreadSafety < Minitest::Test
     errors = run_threads do |idx, errs|
       ITERATIONS.times do
         env = { "n_plus_one" => idx.even? }
-        status, _, body = middleware.call(env)
-        unless status == 200
-          errs << "Thread #{idx}: got status #{status}"
-        end
+        status, = middleware.call(env)
+        errs << "Thread #{idx}: got status #{status}" unless status == 200
       end
     end
 
@@ -398,9 +370,7 @@ class TestThreadSafety < Minitest::Test
 
       detection = detections.find { |d| d.table_name == "comments" }
       if detection
-        if detection.count > post_count
-          errs << "Thread #{idx}: count #{detection.count} exceeds post_count #{post_count} — possible cross-thread leak"
-        end
+        errs << "Thread #{idx}: count #{detection.count} exceeds post_count #{post_count} — possible cross-thread leak" if detection.count > post_count
       else
         errs << "Thread #{idx}: no comments detection found"
       end
@@ -417,19 +387,24 @@ class TestThreadSafety < Minitest::Test
     mutex = Mutex.new
     callback_count = 0
 
-    AndOne.notifications_callback = ->(_dets, _msg) do
+    AndOne.notifications_callback = lambda { |_dets, _msg|
       mutex.synchronize { callback_count += 1 }
-    end
+    }
 
-    errors = run_threads(THREAD_COUNT * 2) do |idx, errs|
+    errors = run_threads(THREAD_COUNT * 2) do |idx, _errs|
       (ITERATIONS * 2).times do
         case idx % 3
         when 0
           AndOne.scan { Post.all.each { |p| p.comments.to_a } }
         when 1
-          AndOne.scan { Post.all.each { |p| p.author } }
+          AndOne.scan { Post.all.each(&:author) }
         when 2
-          AndOne.scan { Post.includes(:comments, :author).each { |p| p.comments.to_a; p.author } }
+          AndOne.scan do
+            Post.includes(:comments, :author).each do |p|
+              p.comments.to_a
+              p.author
+            end
+          end
         end
       end
     end

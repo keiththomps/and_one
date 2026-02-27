@@ -18,7 +18,7 @@ class TestDevUI < Minitest::Test
   end
 
   def test_serves_dashboard_at_mount_path
-    app = ->(env) { [200, {}, ["app"]] }
+    app = ->(_env) { [200, {}, ["app"]] }
     dev_ui = AndOne::DevUI.new(app)
 
     status, headers, body = dev_ui.call("PATH_INFO" => "/__and_one")
@@ -31,7 +31,7 @@ class TestDevUI < Minitest::Test
   end
 
   def test_passes_through_non_matching_requests
-    app = ->(env) { [200, {}, ["app response"]] }
+    app = ->(_env) { [200, {}, ["app response"]] }
     dev_ui = AndOne::DevUI.new(app)
 
     _status, _headers, body = dev_ui.call("PATH_INFO" => "/posts")
@@ -46,7 +46,7 @@ class TestDevUI < Minitest::Test
       Post.all.each { |post| post.comments.to_a }
     end
 
-    app = ->(env) { [200, {}, ["app"]] }
+    app = ->(_env) { [200, {}, ["app"]] }
     dev_ui = AndOne::DevUI.new(app)
 
     _status, _headers, body = dev_ui.call("PATH_INFO" => "/__and_one")
@@ -59,7 +59,7 @@ class TestDevUI < Minitest::Test
   def test_shows_empty_state_without_aggregate_mode
     AndOne.aggregate_mode = false
 
-    app = ->(env) { [200, {}, ["app"]] }
+    app = ->(_env) { [200, {}, ["app"]] }
     dev_ui = AndOne::DevUI.new(app)
 
     _status, _headers, body = dev_ui.call("PATH_INFO" => "/__and_one")

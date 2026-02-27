@@ -33,7 +33,7 @@ class TestFormatter < Minitest::Test
 
   def test_notifications_callback
     captured = nil
-    AndOne.notifications_callback = ->(detections, message) {
+    AndOne.notifications_callback = lambda { |detections, message|
       captured = { detections: detections, message: message }
     }
 

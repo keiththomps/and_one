@@ -22,7 +22,7 @@ class TestSidekiqMiddleware < Minitest::Test
 
   def test_detects_n_plus_one_in_job
     captured = nil
-    AndOne.notifications_callback = ->(detections, message) {
+    AndOne.notifications_callback = lambda { |detections, _message|
       captured = detections
     }
 
@@ -37,7 +37,7 @@ class TestSidekiqMiddleware < Minitest::Test
 
   def test_no_detection_with_includes
     captured = nil
-    AndOne.notifications_callback = ->(detections, message) {
+    AndOne.notifications_callback = lambda { |detections, _message|
       captured = detections
     }
 
@@ -51,12 +51,12 @@ class TestSidekiqMiddleware < Minitest::Test
   def test_does_not_corrupt_error_backtrace
     error = assert_raises(RuntimeError) do
       @middleware.call(nil, {}, "default") do
-        raise RuntimeError, "sidekiq job exploded"
+        raise "sidekiq job exploded"
       end
     end
 
     assert_equal "sidekiq job exploded", error.message
-    assert error.backtrace.any? { |line| line.include?("test_sidekiq_middleware.rb") }
+    assert(error.backtrace.any? { |line| line.include?("test_sidekiq_middleware.rb") })
     refute AndOne.scanning?
   end
 
@@ -75,7 +75,7 @@ class TestSidekiqMiddleware < Minitest::Test
   def test_does_not_double_scan_when_already_scanning
     # Simulate ActiveJobHook already started a scan
     captured = []
-    AndOne.notifications_callback = ->(detections, message) {
+    AndOne.notifications_callback = lambda { |detections, _message|
       captured << detections
     }
 

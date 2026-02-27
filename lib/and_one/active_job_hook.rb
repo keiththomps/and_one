@@ -18,8 +18,8 @@ module AndOne
 
     private
 
-    def and_one_scan
-      and_one_wrap { yield }
+    def and_one_scan(&)
+      and_one_wrap(&)
     end
   end
 end

@@ -33,14 +33,14 @@ class TestDetection < Minitest::Test
     fp1 = nil
     fp2 = nil
 
-    AndOne.notifications_callback = ->(dets, msg) { fp1 = dets.first.fingerprint }
+    AndOne.notifications_callback = ->(dets, _msg) { fp1 = dets.first.fingerprint }
     AndOne.scan do
       Post.all.each { |post| post.comments.to_a }
     end
 
-    AndOne.notifications_callback = ->(dets, msg) { fp2 = dets.first.fingerprint }
+    AndOne.notifications_callback = ->(dets, _msg) { fp2 = dets.first.fingerprint }
     AndOne.scan do
-      Post.all.each { |post| post.author }
+      Post.all.each(&:author)
     end
 
     refute_equal fp1, fp2
@@ -77,9 +77,9 @@ class TestDetection < Minitest::Test
     # They may or may not differ depending on how Ruby reports line numbers,
     # but both should be in this test file
     assert_includes det.origin_frame, "test_detection.rb"
-    if det.fix_location
-      assert_includes det.fix_location, "test_detection.rb"
-    end
+    return unless det.fix_location
+
+    assert_includes det.fix_location, "test_detection.rb"
   end
 
   def test_raw_caller_strings_include_gem_paths

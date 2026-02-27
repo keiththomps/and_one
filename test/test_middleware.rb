@@ -18,7 +18,7 @@ class TestMiddleware < Minitest::Test
   end
 
   def test_middleware_does_not_corrupt_error_backtrace
-    app = ->(_env) { raise RuntimeError, "something broke" }
+    app = ->(_env) { raise "something broke" }
     middleware = AndOne::Middleware.new(app)
 
     error = assert_raises(RuntimeError) do
@@ -27,13 +27,16 @@ class TestMiddleware < Minitest::Test
 
     assert_equal "something broke", error.message
     # Backtrace should point to THIS test file, not to and_one internals
-    assert error.backtrace.any? { |line| line.include?("test_middleware.rb") }
+    assert(error.backtrace.any? { |line| line.include?("test_middleware.rb") })
   end
 
   def test_middleware_passes_through_when_disabled
     AndOne.enabled = false
     app_called = false
-    app = ->(_env) { app_called = true; [200, {}, ["OK"]] }
+    app = lambda { |_env|
+      app_called = true
+      [200, {}, ["OK"]]
+    }
 
     middleware = AndOne::Middleware.new(app)
     middleware.call({})

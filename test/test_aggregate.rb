@@ -46,7 +46,7 @@ class TestAggregate < Minitest::Test
 
     # Different N+1
     AndOne.scan do
-      Post.all.each { |post| post.author }
+      Post.all.each(&:author)
     end
 
     assert_equal 2, report_count

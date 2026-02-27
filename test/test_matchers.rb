@@ -82,7 +82,7 @@ class TestMinitestHelper < Minitest::Test
   end
 
   def test_matchers_restore_callback
-    original_callback = ->(d, m) { "original" }
+    original_callback = ->(_d, _m) { "original" }
     AndOne.notifications_callback = original_callback
 
     assert_no_n_plus_one do

@@ -15,25 +15,25 @@ module AndOne
   #
   module MinitestHelper
     # Assert that the block does NOT trigger any N+1 queries.
-    def assert_no_n_plus_one(message = nil, &block)
-      detections = scan_for_n_plus_ones(&block)
+    def assert_no_n_plus_one(message = nil, &)
+      detections = scan_for_n_plus_ones(&)
 
-      if detections.any?
-        formatter = Formatter.new(
-          backtrace_cleaner: AndOne.backtrace_cleaner || AndOne.send(:default_backtrace_cleaner)
-        )
-        detail = formatter.format(detections)
-        summary = detections.map { |d|
-          "#{d.count} queries to `#{d.table_name || 'unknown'}` (expected 1)"
-        }.join("; ")
-        msg = message || "Expected no N+1 queries, but #{detections.size} detected: #{summary}\n#{detail}"
-        flunk(msg)
-      end
+      return unless detections.any?
+
+      formatter = Formatter.new(
+        backtrace_cleaner: AndOne.backtrace_cleaner || AndOne.send(:default_backtrace_cleaner)
+      )
+      detail = formatter.format(detections)
+      summary = detections.map do |d|
+        "#{d.count} queries to `#{d.table_name || "unknown"}` (expected 1)"
+      end.join("; ")
+      msg = message || "Expected no N+1 queries, but #{detections.size} detected: #{summary}\n#{detail}"
+      flunk(msg)
     end
 
     # Assert that the block DOES trigger N+1 queries (useful for documenting known issues).
-    def assert_n_plus_one(message = nil, &block)
-      detections = scan_for_n_plus_ones(&block)
+    def assert_n_plus_one(message = nil, &)
+      detections = scan_for_n_plus_ones(&)
 
       if detections.empty?
         msg = message || "Expected N+1 queries, but none were detected"
@@ -45,7 +45,7 @@ module AndOne
 
     private
 
-    def scan_for_n_plus_ones(&block)
+    def scan_for_n_plus_ones(&)
       # Temporarily disable raise_on_detect so scan returns detections
       # instead of raising
       previous_raise = AndOne.raise_on_detect
@@ -54,7 +54,7 @@ module AndOne
       AndOne.notifications_callback = nil
 
       begin
-        AndOne.scan(&block) || []
+        AndOne.scan(&) || []
       ensure
         AndOne.raise_on_detect = previous_raise
         AndOne.notifications_callback = previous_callback
@@ -100,9 +100,9 @@ module AndOne
           backtrace_cleaner: AndOne.backtrace_cleaner || AndOne.send(:default_backtrace_cleaner)
         )
         detail = formatter.format(@detections)
-        summary = @detections.map { |d|
-          "#{d.count} queries to `#{d.table_name || 'unknown'}` (expected 1)"
-        }.join("; ")
+        summary = @detections.map do |d|
+          "#{d.count} queries to `#{d.table_name || "unknown"}` (expected 1)"
+        end.join("; ")
         "expected no N+1 queries, but #{@detections.size} detected: #{summary}\n#{detail}"
       end
 

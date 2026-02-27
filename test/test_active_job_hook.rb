@@ -33,7 +33,7 @@ class ErrorJob < ActiveJob::Base
   self.queue_adapter = :inline
 
   def perform
-    raise RuntimeError, "job exploded"
+    raise "job exploded"
   end
 end
 
@@ -54,7 +54,7 @@ class TestActiveJobHook < Minitest::Test
 
   def test_detects_n_plus_one_in_job
     captured = nil
-    AndOne.notifications_callback = ->(detections, message) {
+    AndOne.notifications_callback = lambda { |detections, _message|
       captured = detections
     }
 
@@ -67,7 +67,7 @@ class TestActiveJobHook < Minitest::Test
 
   def test_no_detection_with_includes_in_job
     captured = nil
-    AndOne.notifications_callback = ->(detections, message) {
+    AndOne.notifications_callback = lambda { |detections, _message|
       captured = detections
     }
 
@@ -82,7 +82,7 @@ class TestActiveJobHook < Minitest::Test
     end
 
     assert_equal "job exploded", error.message
-    assert error.backtrace.any? { |line| line.include?("test_active_job_hook.rb") }
+    assert(error.backtrace.any? { |line| line.include?("test_active_job_hook.rb") })
     refute AndOne.scanning?
   end
 
@@ -90,7 +90,7 @@ class TestActiveJobHook < Minitest::Test
     AndOne.enabled = false
 
     captured = nil
-    AndOne.notifications_callback = ->(detections, message) {
+    AndOne.notifications_callback = lambda { |detections, _message|
       captured = detections
     }
 

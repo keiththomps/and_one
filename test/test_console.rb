@@ -69,7 +69,7 @@ class TestConsole < Minitest::Test
 
   def test_cycle_scan_detects_n_plus_one
     captured = nil
-    AndOne.notifications_callback = ->(dets, msg) { captured = dets }
+    AndOne.notifications_callback = ->(dets, _msg) { captured = dets }
 
     AndOne::Console.activate!
 
@@ -80,7 +80,7 @@ class TestConsole < Minitest::Test
     AndOne::Console.send(:cycle_scan)
 
     refute_nil captured, "Expected N+1 detection during console scan"
-    assert captured.any? { |d| d.table_name == "comments" }
+    assert(captured.any? { |d| d.table_name == "comments" })
 
     # Should still be scanning for the next command
     assert AndOne.scanning?
@@ -88,7 +88,7 @@ class TestConsole < Minitest::Test
 
   def test_cycle_scan_resets_between_commands
     captured_calls = []
-    AndOne.notifications_callback = ->(dets, msg) { captured_calls << dets }
+    AndOne.notifications_callback = ->(dets, _msg) { captured_calls << dets }
 
     AndOne::Console.activate!
 

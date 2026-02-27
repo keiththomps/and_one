@@ -5,8 +5,8 @@ module AndOne
   # Each instance tracks queries for a single request/block scope.
   class Detector
     DEFAULT_ALLOW_LIST = [
-      /active_record\/relation.*preload_associations/,
-      /active_record\/validations\/uniqueness/
+      %r{active_record/relation.*preload_associations},
+      %r{active_record/validations/uniqueness}
     ].freeze
 
     attr_reader :detections
@@ -58,7 +58,7 @@ module AndOne
         name = payload[:name]
 
         next if name == "SCHEMA"
-        next if !sql.include?("SELECT")
+        next unless sql.include?("SELECT")
         next if payload[:cached]
         next if current_detector.send(:ignored?, sql)
 
@@ -79,13 +79,13 @@ module AndOne
       @query_holder[location_key] << sql
 
       # Only store caller on the second occurrence to save memory
-      if @query_counter[location_key] >= 2
-        @query_callers[location_key] = locations
-        @query_metadata[location_key] ||= {
-          connection_adapter: adapter_name,
-          type_casted_binds: payload[:type_casted_binds]
-        }
-      end
+      return unless @query_counter[location_key] >= 2
+
+      @query_callers[location_key] = locations
+      @query_metadata[location_key] ||= {
+        connection_adapter: adapter_name,
+        type_casted_binds: payload[:type_casted_binds]
+      }
     end
 
     def location_fingerprint(locations)
@@ -99,7 +99,7 @@ module AndOne
 
     def adapter_name
       ActiveRecord::Base.connection_db_config.adapter
-    rescue
+    rescue StandardError
       "unknown"
     end
 
@@ -135,7 +135,7 @@ module AndOne
     end
 
     def ignored?(sql)
-      @ignore_queries.any? { |pattern| pattern === sql }
+      @ignore_queries.any? { |pattern| pattern.match?(sql) }
     end
   end
 end

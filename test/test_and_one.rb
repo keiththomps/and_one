@@ -81,7 +81,7 @@ class TestIgnoreCallers < Minitest::Test
     AndOne.ignore_callers = [/test_and_one/]
 
     captured = nil
-    AndOne.notifications_callback = ->(dets, msg) { captured = dets }
+    AndOne.notifications_callback = ->(dets, _msg) { captured = dets }
 
     AndOne.scan do
       Post.all.each { |post| post.comments.to_a }
@@ -94,7 +94,7 @@ class TestIgnoreCallers < Minitest::Test
     AndOne.ignore_callers = [/nonexistent_file_pattern/]
 
     captured = nil
-    AndOne.notifications_callback = ->(dets, msg) { captured = dets }
+    AndOne.notifications_callback = ->(dets, _msg) { captured = dets }
 
     AndOne.scan do
       Post.all.each { |post| post.comments.to_a }
@@ -104,10 +104,10 @@ class TestIgnoreCallers < Minitest::Test
   end
 
   def test_ignore_callers_with_non_matching_path_pattern
-    AndOne.ignore_callers = [/app\/views\/admin/]
+    AndOne.ignore_callers = [%r{app/views/admin}]
 
     captured = nil
-    AndOne.notifications_callback = ->(dets, msg) { captured = dets }
+    AndOne.notifications_callback = ->(dets, _msg) { captured = dets }
 
     # This call stack doesn't include admin views, so should still detect
     AndOne.scan do

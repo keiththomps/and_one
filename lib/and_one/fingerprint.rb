@@ -22,7 +22,7 @@ module AndOne
       normalized.gsub!(/`(\w+)`/, '\1')
 
       # Normalize single-quoted string literals
-      normalized.gsub!(/\\[']/, "")
+      normalized.gsub!("\\'", "")
       normalized.gsub!(/'(?:[^'\\]|\\.)*'/m, "?")
 
       # Normalize numbers (standalone, not part of identifiers)

@@ -8,8 +8,8 @@ class TestScanHelper < Minitest::Test
   class FakeMiddleware
     include AndOne::ScanHelper
 
-    def run(&block)
-      and_one_wrap(&block)
+    def run(&)
+      and_one_wrap(&)
     end
   end
 

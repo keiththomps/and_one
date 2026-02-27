@@ -32,7 +32,7 @@ class TestIgnoreFile < Minitest::Test
       AndOne.reload_ignore_file!
 
       captured = nil
-      AndOne.notifications_callback = ->(dets, msg) { captured = dets }
+      AndOne.notifications_callback = ->(dets, _msg) { captured = dets }
 
       AndOne.scan do
         Post.all.each { |post| post.comments.to_a }
@@ -48,7 +48,7 @@ class TestIgnoreFile < Minitest::Test
       AndOne.reload_ignore_file!
 
       captured = nil
-      AndOne.notifications_callback = ->(dets, msg) { captured = dets }
+      AndOne.notifications_callback = ->(dets, _msg) { captured = dets }
 
       AndOne.scan do
         Post.all.each { |post| post.comments.to_a }
@@ -65,7 +65,7 @@ class TestIgnoreFile < Minitest::Test
       AndOne.reload_ignore_file!
 
       captured = nil
-      AndOne.notifications_callback = ->(dets, msg) { captured = dets }
+      AndOne.notifications_callback = ->(dets, _msg) { captured = dets }
 
       AndOne.scan do
         Post.all.each { |post| post.comments.to_a }
@@ -82,7 +82,7 @@ class TestIgnoreFile < Minitest::Test
       AndOne.reload_ignore_file!
 
       captured = nil
-      AndOne.notifications_callback = ->(dets, msg) { captured = dets }
+      AndOne.notifications_callback = ->(dets, _msg) { captured = dets }
 
       AndOne.scan do
         Post.all.each { |post| post.comments.to_a }
@@ -98,7 +98,7 @@ class TestIgnoreFile < Minitest::Test
       AndOne.reload_ignore_file!
 
       captured = nil
-      AndOne.notifications_callback = ->(dets, msg) { captured = dets }
+      AndOne.notifications_callback = ->(dets, _msg) { captured = dets }
 
       AndOne.scan do
         Post.all.each { |post| post.comments.to_a }
@@ -121,7 +121,7 @@ class TestIgnoreFile < Minitest::Test
       AndOne.reload_ignore_file!
 
       captured = nil
-      AndOne.notifications_callback = ->(dets, msg) { captured = dets }
+      AndOne.notifications_callback = ->(dets, _msg) { captured = dets }
 
       AndOne.scan do
         Post.all.each { |post| post.comments.to_a }
@@ -136,7 +136,7 @@ class TestIgnoreFile < Minitest::Test
     AndOne.reload_ignore_file!
 
     captured = nil
-    AndOne.notifications_callback = ->(dets, msg) { captured = dets }
+    AndOne.notifications_callback = ->(dets, _msg) { captured = dets }
 
     AndOne.scan do
       Post.all.each { |post| post.comments.to_a }

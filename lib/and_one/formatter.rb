@@ -23,7 +23,8 @@ module AndOne
       parts = []
       parts << ""
       parts << colorize(SEPARATOR, :red)
-      parts << colorize(" 🏀 And One! #{detections.size} N+1 quer#{detections.size == 1 ? 'y' : 'ies'} detected", :red, :bold)
+      parts << colorize(" 🏀 And One! #{detections.size} N+1 quer#{detections.size == 1 ? "y" : "ies"} detected", :red,
+                        :bold)
       parts << colorize(SEPARATOR, :red)
 
       detections.each_with_index do |detection, i|
@@ -38,12 +39,13 @@ module AndOne
 
     private
 
-    def format_detection(detection, index)
+    def format_detection(detection, index) # rubocop:disable Metrics
       lines = []
       cleaned_bt = clean_backtrace(detection.raw_caller_strings)
 
       # Header with count and fingerprint
-      lines << colorize("  #{index}) #{detection.count}x repeated query on `#{detection.table_name || 'unknown'}`", :yellow, :bold)
+      lines << colorize("  #{index}) #{detection.count}x repeated query on `#{detection.table_name || "unknown"}`",
+                        :yellow, :bold)
       lines << colorize("     fingerprint: #{detection.fingerprint}", :dim)
       lines << ""
 
@@ -68,9 +70,8 @@ module AndOne
 
       # Abbreviated call stack
       lines << colorize("  Call stack:", :cyan)
-      cleaned_bt.first(6).each_with_index do |frame, fi|
-        prefix = fi == 0 ? "    " : "    "
-        lines << colorize("#{prefix}#{frame}", :dim)
+      cleaned_bt.first(6).each_with_index do |frame, _fi|
+        lines << colorize("    #{frame}", :dim)
       end
       lines << colorize("    ... (#{cleaned_bt.size - 6} more frames)", :dim) if cleaned_bt.size > 6
       lines << ""
@@ -80,12 +81,8 @@ module AndOne
       if suggestion&.actionable?
         lines << colorize("  💡 Suggestion:", :cyan, :bold)
         lines << colorize("    #{suggestion.fix_hint}", :green)
-        if suggestion.loading_strategy_hint
-          lines << colorize("    #{suggestion.loading_strategy_hint}", :green)
-        end
-        if suggestion.strict_loading_hint
-          lines << colorize("    #{suggestion.strict_loading_hint}", :dim)
-        end
+        lines << colorize("    #{suggestion.loading_strategy_hint}", :green) if suggestion.loading_strategy_hint
+        lines << colorize("    #{suggestion.strict_loading_hint}", :dim) if suggestion.strict_loading_hint
       end
 
       # Ignore hint
@@ -98,7 +95,7 @@ module AndOne
 
     def resolve_suggestion(detection, cleaned_backtrace)
       AssociationResolver.resolve(detection, cleaned_backtrace)
-    rescue
+    rescue StandardError
       nil
     end
 
@@ -121,6 +118,7 @@ module AndOne
 
     def truncate_query(sql, max_length: 200)
       return sql if sql.length <= max_length
+
       "#{sql[0...max_length]}..."
     end
 

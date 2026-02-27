@@ -1,8 +1,68 @@
 AllCops:
   TargetRubyVersion: 3.2
+  SuggestExtensions: false
+  NewCops: enable
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
 
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
+
+Style/Documentation:
+  Enabled: false
+
+# Test files naturally have long methods and complex setup
+Metrics/MethodLength:
+  Exclude:
+    - "test/**/*"
+  CountAsOne:
+    - heredoc
+    - array
+    - hash
+  Max: 25
+
+Metrics/AbcSize:
+  Exclude:
+    - "test/**/*"
+  Max: 45
+
+Metrics/CyclomaticComplexity:
+  Exclude:
+    - "test/**/*"
+  Max: 15
+
+Metrics/PerceivedComplexity:
+  Exclude:
+    - "test/**/*"
+  Max: 16
+
+Metrics/ClassLength:
+  Exclude:
+    - "test/**/*"
+  Max: 200
+
+Metrics/ModuleLength:
+  Max: 200
+
+Metrics/BlockLength:
+  Exclude:
+    - "test/**/*"
+  Max: 30
+
+Metrics/ParameterLists:
+  Max: 8
+
+Layout/LineLength:
+  Max: 160
+
+Naming/MethodParameterName:
+  MinNameLength: 2
+
+Naming/VariableNumber:
+  Exclude:
+    - "test/**/*"
+
+Style/OneClassPerFile:
+  Exclude:
+    - "test/**/*"

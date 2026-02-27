@@ -50,7 +50,7 @@ module AndOne
 
         model = ActiveRecord::Base.descendants.detect do |klass|
           klass.table_name == table_name
-        rescue
+        rescue StandardError
           false
         end
 
@@ -82,11 +82,11 @@ module AndOne
 
         klass.reflect_on_all_associations.each do |assoc|
           matched = if effective_key
-            association_matches?(assoc, target_model, effective_key)
-          else
-            # For through associations, foreign key may not be directly visible
-            through_association_matches?(assoc, target_model)
-          end
+                      association_matches?(assoc, target_model, effective_key)
+                    else
+                      # For through associations, foreign key may not be directly visible
+                      through_association_matches?(assoc, target_model)
+                    end
 
           next unless matched
 
@@ -98,10 +98,10 @@ module AndOne
             fix_hint: build_fix_hint(klass, assoc.name),
             loading_strategy: strategy,
             is_through: assoc.is_a?(ActiveRecord::Reflection::ThroughReflection),
-            is_polymorphic: assoc.respond_to?(:options) && !!assoc.options[:as]
+            is_polymorphic: assoc.respond_to?(:options) && !assoc.options[:as].nil?
           }
         end
-      rescue
+      rescue StandardError
         next
       end
 
@@ -133,27 +133,25 @@ module AndOne
     end
 
     def association_matches?(assoc, target_model, foreign_key)
-      begin
-        case assoc
-        when ActiveRecord::Reflection::ThroughReflection
-          # has_many :through — check if the source association points to our target
-          assoc.klass == target_model
-        when ActiveRecord::Reflection::HasManyReflection,
-             ActiveRecord::Reflection::HasOneReflection
-          if assoc.options[:as]
-            # Polymorphic: has_many :comments, as: :commentable
-            # The foreign key is like "commentable_id" and there's a "commentable_type" column
-            poly_fk = "#{assoc.options[:as]}_id"
-            assoc.klass == target_model && poly_fk == foreign_key
-          else
-            assoc.klass == target_model && assoc.foreign_key.to_s == foreign_key
-          end
+      case assoc
+      when ActiveRecord::Reflection::ThroughReflection
+        # has_many :through — check if the source association points to our target
+        assoc.klass == target_model
+      when ActiveRecord::Reflection::HasManyReflection,
+           ActiveRecord::Reflection::HasOneReflection
+        if assoc.options[:as]
+          # Polymorphic: has_many :comments, as: :commentable
+          # The foreign key is like "commentable_id" and there's a "commentable_type" column
+          poly_fk = "#{assoc.options[:as]}_id"
+          assoc.klass == target_model && poly_fk == foreign_key
         else
-          false
+          assoc.klass == target_model && assoc.foreign_key.to_s == foreign_key
         end
-      rescue NameError
+      else
         false
       end
+    rescue NameError
+      false
     end
 
     def build_fix_hint(parent_model, association_name)
@@ -161,13 +159,10 @@ module AndOne
     end
 
     # Determine the optimal loading strategy based on query patterns
-    def loading_strategy(sql, association_name)
+    def loading_strategy(sql, _association_name)
       # If the query has WHERE conditions on the association table, eager_load
       # is better because it does a LEFT OUTER JOIN allowing WHERE filtering
-      if sql =~ /\bWHERE\b/i && sql =~ /\bJOIN\b/i
-        :eager_load
-      elsif sql =~ /\bWHERE\b.*\b(?:AND|OR)\b/i
-        # Complex WHERE — eager_load with JOIN is more efficient
+      if sql =~ /\bWHERE\b/i && (sql =~ /\bJOIN\b/i || sql =~ /\b(?:AND|OR)\b/i)
         :eager_load
       else
         # Default: preload is generally faster (separate queries, no JOIN overhead)
@@ -202,10 +197,10 @@ module AndOne
       return nil unless actionable? && @parent_model
 
       assoc_type = if @is_through
-        "has_many :#{@association_name}, through: ..."
-      else
-        "has_many :#{@association_name}"
-      end
+                     "has_many :#{@association_name}, through: ..."
+                   else
+                     "has_many :#{@association_name}"
+                   end
 
       "Or prevent at the model level: `#{assoc_type}, strict_loading: true` in #{@parent_model.name}"
     end
@@ -219,8 +214,6 @@ module AndOne
         "Consider `.eager_load(:#{@association_name})` instead — your query filters on the association, so a JOIN is more efficient"
       when :preload
         "Consider `.preload(:#{@association_name})` — separate queries avoid JOIN overhead for simple loading"
-      else
-        nil # :includes is the default, no extra hint needed
       end
     end
   end

@@ -14,9 +14,7 @@ module AndOne
         app.middleware.insert_before(0, AndOne::Middleware)
 
         # Dev UI dashboard for N+1 overview (requires aggregate_mode)
-        if Rails.env.development?
-          app.middleware.use(AndOne::DevUI)
-        end
+        app.middleware.use(AndOne::DevUI) if Rails.env.development?
 
         # ActiveJob hook — covers all job backends (Sidekiq, GoodJob, SolidQueue, etc.)
         ActiveSupport.on_load(:active_job) do
