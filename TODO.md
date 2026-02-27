@@ -1,0 +1,52 @@
+# AndOne — Feature Roadmap
+
+## ✅ Completed
+
+- [x] Core detection engine using `sql.active_record` notifications
+- [x] SQL fingerprinting without external dependencies
+- [x] Association resolver that suggests exact `.includes()` fixes
+- [x] Rich formatted output with query, call stack, and fix suggestions
+- [x] Rack middleware that never corrupts error backtraces
+- [x] Railtie for zero-config auto-setup in dev/test
+- [x] Raises in test env, warns in dev, disabled in production
+- [x] Pause/resume support for known N+1s
+- [x] ActiveJob `around_perform` hook (works with any backend)
+- [x] Sidekiq server middleware (for jobs bypassing ActiveJob)
+- [x] `ScanHelper` shared module to DRY up scan lifecycle across entry points
+- [x] Double-scan protection (ActiveJob + Sidekiq don't conflict)
+
+## 🎯 High Value — Would Meaningfully Improve DX
+
+- [ ] **Auto-detect the "fix location"** — Walk the backtrace to find the nearest `ActiveRecord::Relation` call (`.all`, `.where`, `.find_each`) and point directly to the line that should get `.includes()` added. More actionable than just showing the full stack.
+
+- [ ] **Allowlist file (`.and_one_ignore`)** — A YAML or plain-text file in the project root where teams can permanently silence known N+1s they've chosen to accept. Checked into source control. Avoids littering code with `AndOne.pause` blocks.
+
+- [ ] **Aggregate mode for development** — Instead of warning on every request, collect unique N+1 fingerprints per session and show a summary. "You have 3 unique N+1 patterns. Run `rails and_one:report` to see them." Prevents log spam when you're working on unrelated code.
+
+- [ ] **RSpec / Minitest matchers** — `expect { ... }.not_to cause_n_plus_one` and `assert_no_n_plus_one { ... }`. More ergonomic than manually inspecting `AndOne.scan` return values.
+
+## 💡 Medium Value — Polish & Power User Features
+
+- [ ] **`strict_loading` suggestion** — When an N+1 is detected, also suggest the `strict_loading` approach as an alternative: "You could also add `has_many :comments, strict_loading: true` to prevent this at the model level."
+
+- [ ] **Query count in test failure messages** — "N+1 detected: 47 queries to `comments` (expected 1). Add `.includes(:comments)` to reduce to 1 query." Makes severity immediately obvious.
+
+- [ ] **Dev UI endpoint** — A tiny Rack endpoint (e.g., `/__and_one`) in development that shows all N+1s detected in the current server session with fix suggestions. Like a mini BetterErrors for N+1s.
+
+- [ ] **GitHub Actions / CI annotations** — When `GITHUB_ACTIONS` env var is set, output detections in `::warning file=...` format so they appear as annotations on the PR diff.
+
+- [ ] **Ignore by caller pattern** — In addition to `ignore_queries` (SQL patterns), support `ignore_callers` to suppress detections originating from specific paths: "ignore any N+1 from `app/views/admin/*`".
+
+- [ ] **`has_many :through` and polymorphic support** — Extend the association resolver to handle `has_many :through` join chains and polymorphic associations, which are common sources of confusing N+1s.
+
+- [ ] **`preload` vs `includes` vs `eager_load` recommendation** — Suggest the optimal loading strategy based on the query pattern (e.g., `eager_load` when there's a WHERE on the association).
+
+## 🧪 Lower Priority — Nice to Have
+
+- [ ] **Structured JSON logging** — A JSON output mode for log aggregation services (Datadog, Splunk, etc.).
+
+- [ ] **Thread-safety audit for Puma** — The current thread-local approach works, but formally verify behavior with Puma's thread pool and connection pool interactions under concurrent load.
+
+- [ ] **Rails console integration** — Auto-scan in `rails console` sessions and print warnings inline. Useful for debugging queries interactively.
+
+- [ ] **Configurable per-environment thresholds** — Different `min_n_queries` for dev vs test. In dev you might tolerate 3+, in test you want strict 2+.
