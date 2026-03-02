@@ -16,6 +16,7 @@ AndOne stays completely invisible until it detects an N+1 query — then it tell
 - **Ignore file** — `.and_one_ignore` with `gem:`, `path:`, `query:`, and `fingerprint:` rules
 - **Aggregate mode** — report each unique N+1 once per server session with occurrence counts
 - **Test matchers** — Minitest (`assert_no_n_plus_one`) and RSpec (`expect { }.not_to cause_n_plus_one`)
+- **Dev toast notifications** — in-page toast on every page that triggers an N+1, with a link to the dashboard
 - **Dev UI dashboard** — browse `/__and_one` in development for a live N+1 overview
 - **Rails console integration** — auto-scans in `rails console` and prints warnings inline
 - **Structured JSON logging** — JSON output mode for Datadog, Splunk, and other log aggregation services
@@ -148,6 +149,36 @@ AndOne.aggregate.size       # number of unique patterns
 AndOne.aggregate.reset!     # clear and start fresh
 ```
 
+## Development UI
+
+### In-page toast notifications
+
+When an N+1 is detected during a request, AndOne injects a small toast notification into the bottom-right corner of the page. The toast shows which tables were affected and links to the full dashboard for details.
+
+This is enabled by default in development — no configuration needed. The toast auto-dismisses after 8 seconds, but hovering over it keeps it open.
+
+To disable it:
+
+```ruby
+# config/initializers/and_one.rb
+AndOne.dev_toast = false
+```
+
+The toast only appears on HTML responses with a 200 status, so it won't interfere with API endpoints, redirects, or error pages.
+
+### Dashboard
+
+Browse `/__and_one` in development for a full overview of every unique N+1 detected in the current server session. The dashboard shows the query, origin, fix location, and suggested `.includes()` call for each detection.
+
+The dashboard requires aggregate mode to track detections across requests:
+
+```ruby
+# config/initializers/and_one.rb
+AndOne.aggregate_mode = true
+```
+
+Both features work together: the toast gives you immediate feedback on the page you're looking at, and the dashboard link takes you to the full picture.
+
 ## Test Matchers
 
 ### Minitest
@@ -216,6 +247,9 @@ AndOne.configure do |config|
 
   # Aggregate mode — only report each unique N+1 once per session
   config.aggregate_mode = true
+
+  # In-page toast notifications (default: true in development)
+  config.dev_toast = true
 
   # Path to ignore file (default: Rails.root/.and_one_ignore)
   config.ignore_file_path = Rails.root.join(".and_one_ignore").to_s

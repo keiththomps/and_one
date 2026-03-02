@@ -69,6 +69,7 @@ module AndOneTestHelper
     AndOne.aggregate_mode = false
     AndOne.json_logging = false
     AndOne.env_thresholds = nil
+    AndOne.dev_toast = false
     AndOne.ignore_file_path = nil
     AndOne.reload_ignore_file!
     AndOne.instance_variable_set(:@aggregate, nil)

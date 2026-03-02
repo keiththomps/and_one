@@ -13,8 +13,13 @@ module AndOne
         # Rack middleware for web requests
         app.middleware.insert_before(0, AndOne::Middleware)
 
-        # Dev UI dashboard for N+1 overview (requires aggregate_mode)
-        app.middleware.use(AndOne::DevUI) if Rails.env.development?
+        if Rails.env.development?
+          # Dev UI dashboard for N+1 overview (requires aggregate_mode)
+          app.middleware.use(AndOne::DevUI)
+
+          # Dev toast: show in-page N+1 notifications (default on in development)
+          AndOne.dev_toast = true if AndOne.dev_toast.nil?
+        end
 
         # ActiveJob hook — covers all job backends (Sidekiq, GoodJob, SolidQueue, etc.)
         ActiveSupport.on_load(:active_job) do

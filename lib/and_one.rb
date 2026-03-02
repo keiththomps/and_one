@@ -15,7 +15,8 @@ module AndOne
     attr_accessor :enabled, :raise_on_detect, :backtrace_cleaner,
                   :allow_stack_paths, :ignore_queries, :ignore_callers,
                   :min_n_queries, :notifications_callback, :aggregate_mode,
-                  :ignore_file_path, :json_logging, :env_thresholds
+                  :ignore_file_path, :json_logging, :env_thresholds,
+                  :dev_toast
 
     def configure
       yield self
@@ -271,6 +272,7 @@ require_relative "and_one/aggregate"
 require_relative "and_one/matchers"
 require_relative "and_one/scan_helper"
 require_relative "and_one/dev_ui"
+require_relative "and_one/dev_toast"
 require_relative "and_one/console"
 require_relative "and_one/middleware"
 require_relative "and_one/active_job_hook"
