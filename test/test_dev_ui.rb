@@ -40,8 +40,6 @@ class TestDevUI < Minitest::Test
   end
 
   def test_shows_aggregate_detections
-    AndOne.aggregate_mode = true
-
     AndOne.scan do
       Post.all.each { |post| post.comments.to_a }
     end
@@ -56,9 +54,7 @@ class TestDevUI < Minitest::Test
     refute_includes html, "No N+1 queries detected yet"
   end
 
-  def test_shows_empty_state_without_aggregate_mode
-    AndOne.aggregate_mode = false
-
+  def test_shows_empty_state_when_no_detections
     app = ->(_env) { [200, {}, ["app"]] }
     dev_ui = AndOne::DevUI.new(app)
 
@@ -66,6 +62,5 @@ class TestDevUI < Minitest::Test
 
     html = body.first
     assert_includes html, "No N+1 queries detected yet"
-    assert_includes html, "aggregate_mode"
   end
 end

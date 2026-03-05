@@ -5,12 +5,10 @@ module AndOne
   # session. Mount at `/__and_one` in development to get a mini dashboard
   # for N+1 queries with fix suggestions.
   #
-  # Requires `aggregate_mode = true` to collect detections across requests.
-  #
   # Usage (manual):
   #   app.middleware.use AndOne::DevUI
   #
-  # Or it's auto-mounted by the Railtie in development when aggregate_mode is on.
+  # Or it's auto-mounted by the Railtie in development.
   class DevUI
     MOUNT_PATH = "/__and_one"
 
@@ -29,7 +27,7 @@ module AndOne
     private
 
     def serve_dashboard(_env)
-      entries = AndOne.aggregate_mode ? AndOne.aggregate.detections : {}
+      entries = AndOne.aggregate.detections
 
       html = render_html(entries)
       [200, { "content-type" => "text/html; charset=utf-8" }, [html]]
@@ -41,7 +39,6 @@ module AndOne
                  <tr>
                    <td colspan="6" class="empty">
                      No N+1 queries detected yet.
-                     #{"<br><strong>Tip:</strong> Set <code>AndOne.aggregate_mode = true</code> to collect detections across requests." unless AndOne.aggregate_mode}
                    </td>
                  </tr>
                HTML

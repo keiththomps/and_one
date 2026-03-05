@@ -14,7 +14,7 @@ module AndOne
         app.middleware.insert_before(0, AndOne::Middleware)
 
         if Rails.env.development?
-          # Dev UI dashboard for N+1 overview (requires aggregate_mode)
+          # Dev UI dashboard for N+1 overview
           app.middleware.use(AndOne::DevUI)
 
           # Dev toast: show in-page N+1 notifications (default on in development)

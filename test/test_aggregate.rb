@@ -8,7 +8,6 @@ class TestAggregate < Minitest::Test
   def setup
     super
     seed_data!
-    AndOne.aggregate_mode = true
   end
 
   def teardown
@@ -106,19 +105,5 @@ class TestAggregate < Minitest::Test
   def test_empty_summary
     summary = AndOne.aggregate.summary
     assert_includes summary, "No N+1 queries detected"
-  end
-
-  def test_disabled_aggregate_mode_reports_every_time
-    AndOne.aggregate_mode = false
-    report_count = 0
-    AndOne.notifications_callback = ->(*) { report_count += 1 }
-
-    2.times do
-      AndOne.scan do
-        Post.all.each { |post| post.comments.to_a }
-      end
-    end
-
-    assert_equal 2, report_count
   end
 end

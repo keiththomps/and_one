@@ -14,7 +14,7 @@ module AndOne
   class << self
     attr_accessor :enabled, :raise_on_detect, :backtrace_cleaner,
                   :allow_stack_paths, :ignore_queries, :ignore_callers,
-                  :min_n_queries, :notifications_callback, :aggregate_mode,
+                  :min_n_queries, :notifications_callback,
                   :ignore_file_path, :json_logging, :env_thresholds,
                   :dev_toast
 
@@ -160,11 +160,9 @@ module AndOne
 
       return if detections.empty?
 
-      # In aggregate mode, only report NEW unique detections
-      if aggregate_mode
-        detections = detections.select { |d| aggregate.record(d) }
-        return if detections.empty?
-      end
+      # Record to aggregate and only report NEW unique detections
+      detections = detections.select { |d| aggregate.record(d) }
+      return if detections.empty?
 
       cleaner = backtrace_cleaner || default_backtrace_cleaner
 

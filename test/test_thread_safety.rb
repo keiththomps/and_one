@@ -185,9 +185,7 @@ class TestThreadSafety < Minitest::Test
 
   # Aggregate mode under concurrent access: the Mutex should prevent
   # lost updates or corrupted state.
-  def test_aggregate_mode_under_concurrency
-    AndOne.aggregate_mode = true
-
+  def test_aggregate_under_concurrency
     errors = run_threads do |_idx, _errs|
       ITERATIONS.times do
         AndOne.scan do
@@ -250,12 +248,16 @@ class TestThreadSafety < Minitest::Test
 
     assert errors.empty?, "Callback errors:\n#{errors.join("\n")}"
 
-    assert_equal THREAD_COUNT, callback_calls.size,
-                 "Expected #{THREAD_COUNT} callback calls, got #{callback_calls.size}"
+    # With deduplication, only the first occurrence triggers the callback.
+    # Subsequent threads see the same fingerprint and silently increment the count.
+    assert callback_calls.size >= 1,
+           "Expected at least 1 callback call, got #{callback_calls.size}"
 
-    unique_threads = callback_calls.uniq.size
-    assert unique_threads > 1,
-           "Expected callbacks from multiple threads, got #{unique_threads} unique"
+    # But the aggregate should have recorded all occurrences
+    entry = AndOne.aggregate.detections.values.first
+    assert entry, "Expected aggregate to have recorded the detection"
+    assert_equal THREAD_COUNT, entry.occurrences,
+                 "Expected #{THREAD_COUNT} occurrences in aggregate, got #{entry.occurrences}"
   end
 
   # Stress test: rapid start/finish cycles across threads.
@@ -382,8 +384,6 @@ class TestThreadSafety < Minitest::Test
   # High-contention stress test: many threads, many iterations, aggregate mode,
   # callbacks — everything at once.
   def test_full_stress
-    AndOne.aggregate_mode = true
-
     mutex = Mutex.new
     callback_count = 0
 

@@ -14,7 +14,7 @@ AndOne stays completely invisible until it detects an N+1 query — then it tell
 - **Auto-raises in test** — N+1s fail your test suite by default
 - **Background job support** — ActiveJob (`around_perform`) and Sidekiq server middleware, with double-scan protection
 - **Ignore file** — `.and_one_ignore` with `gem:`, `path:`, `query:`, and `fingerprint:` rules
-- **Aggregate mode** — report each unique N+1 once per server session with occurrence counts
+- **Automatic deduplication** — each unique N+1 is reported once per server session with occurrence counts
 - **Test matchers** — Minitest (`assert_no_n_plus_one`) and RSpec (`expect { }.not_to cause_n_plus_one`)
 - **Dev toast notifications** — in-page toast on every page that triggers an N+1, with a link to the dashboard
 - **Dev UI dashboard** — browse `/__and_one` in development for a live N+1 overview
@@ -132,14 +132,9 @@ This is especially useful for **N+1s coming from gems** where you can't add `.in
 | `query:some_table` | A specific query pattern should always be ignored |
 | `fingerprint:abc123` | You want to silence one specific detection (shown in output) |
 
-## Aggregate Mode
+## Deduplication
 
-In development, the same N+1 can fire on every request, flooding your logs. Aggregate mode reports each unique pattern only once per server session:
-
-```ruby
-# config/initializers/and_one.rb
-AndOne.aggregate_mode = true
-```
+In development, the same N+1 can fire on every request, flooding your logs. AndOne automatically deduplicates — each unique pattern is reported only once per server session. Subsequent occurrences are silently counted.
 
 You can check the session summary at any time:
 
@@ -169,13 +164,6 @@ The toast only appears on HTML responses with a 200 status, so it won't interfer
 ### Dashboard
 
 Browse `/__and_one` in development for a full overview of every unique N+1 detected in the current server session. The dashboard shows the query, origin, fix location, and suggested `.includes()` call for each detection.
-
-The dashboard requires aggregate mode to track detections across requests:
-
-```ruby
-# config/initializers/and_one.rb
-AndOne.aggregate_mode = true
-```
 
 Both features work together: the toast gives you immediate feedback on the page you're looking at, and the dashboard link takes you to the full picture.
 
@@ -244,9 +232,6 @@ AndOne.configure do |config|
 
   # Minimum repeated queries to trigger (default: 2)
   config.min_n_queries = 3
-
-  # Aggregate mode — only report each unique N+1 once per session
-  config.aggregate_mode = true
 
   # In-page toast notifications (default: true in development)
   config.dev_toast = true

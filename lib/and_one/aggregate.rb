@@ -2,11 +2,8 @@
 
 module AndOne
   # Tracks unique N+1 detections across requests/jobs in a server session.
-  # In aggregate mode, each unique N+1 (by fingerprint) is only reported once.
+  # Each unique N+1 (by fingerprint) is only reported once.
   # Subsequent occurrences are silently counted.
-  #
-  # Usage:
-  #   AndOne.aggregate_mode = true
   #
   # The aggregate can be queried at any time:
   #   AndOne.aggregate.summary   # => formatted string

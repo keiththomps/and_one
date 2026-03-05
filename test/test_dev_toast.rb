@@ -9,7 +9,6 @@ class TestDevToast < Minitest::Test
     super
     seed_data!
     AndOne.dev_toast = true
-    AndOne.aggregate_mode = true
   end
 
   def teardown

@@ -66,7 +66,6 @@ module AndOneTestHelper
     AndOne.ignore_callers = []
     AndOne.min_n_queries = 2
     AndOne.notifications_callback = nil
-    AndOne.aggregate_mode = false
     AndOne.json_logging = false
     AndOne.env_thresholds = nil
     AndOne.dev_toast = false
