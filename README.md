@@ -152,11 +152,12 @@ When an N+1 is detected during a request, AndOne injects a small toast notificat
 
 This is enabled by default in development — no configuration needed. The toast auto-dismisses after 8 seconds, but hovering over it keeps it open.
 
-To disable it:
+To change the position or disable it:
 
 ```ruby
 # config/initializers/and_one.rb
-AndOne.dev_toast = false
+AndOne.dev_toast_position = :bottom_right  # :top_right (default), :top_left, :bottom_right, :bottom_left
+AndOne.dev_toast = false                   # disable entirely
 ```
 
 The toast only appears on HTML responses with a 200 status, so it won't interfere with API endpoints, redirects, or error pages.
@@ -235,6 +236,10 @@ AndOne.configure do |config|
 
   # In-page toast notifications (default: true in development)
   config.dev_toast = true
+
+  # Toast position (default: :top_right)
+  # Options: :top_right, :top_left, :bottom_right, :bottom_left
+  config.dev_toast_position = :top_right
 
   # Path to ignore file (default: Rails.root/.and_one_ignore)
   config.ignore_file_path = Rails.root.join(".and_one_ignore").to_s

@@ -16,7 +16,7 @@ module AndOne
                   :allow_stack_paths, :ignore_queries, :ignore_callers,
                   :min_n_queries, :notifications_callback,
                   :ignore_file_path, :json_logging, :env_thresholds,
-                  :dev_toast
+                  :dev_toast, :dev_toast_position
 
     def configure
       yield self

@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [0.3.1] - 2026-03-05
+
+### Added
+
+- **Configurable toast position** — `AndOne.dev_toast_position` accepts `:top_right` (default), `:top_left`, `:bottom_right`, or `:bottom_left`. The slide-in animation direction adjusts automatically to match.
+
 ## [0.3.0] - 2026-03-05
 
 ### Removed

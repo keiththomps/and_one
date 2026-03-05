@@ -92,6 +92,62 @@ class TestDevToast < Minitest::Test
     assert_includes result, "and 2 more"
   end
 
+  # --- Position configuration tests ---
+
+  def test_default_position_is_top_right
+    html = "<html><body></body></html>"
+    detections = trigger_detections
+
+    result = AndOne::DevToast.inject(html, detections)
+
+    assert_includes result, "top: 1rem"
+    assert_includes result, "right: 1rem"
+  end
+
+  def test_bottom_right_position
+    AndOne.dev_toast_position = :bottom_right
+    html = "<html><body></body></html>"
+    detections = trigger_detections
+
+    result = AndOne::DevToast.inject(html, detections)
+
+    assert_includes result, "bottom: 1rem"
+    assert_includes result, "right: 1rem"
+  end
+
+  def test_top_left_position
+    AndOne.dev_toast_position = :top_left
+    html = "<html><body></body></html>"
+    detections = trigger_detections
+
+    result = AndOne::DevToast.inject(html, detections)
+
+    assert_includes result, "top: 1rem"
+    assert_includes result, "left: 1rem"
+  end
+
+  def test_bottom_left_position
+    AndOne.dev_toast_position = :bottom_left
+    html = "<html><body></body></html>"
+    detections = trigger_detections
+
+    result = AndOne::DevToast.inject(html, detections)
+
+    assert_includes result, "bottom: 1rem"
+    assert_includes result, "left: 1rem"
+  end
+
+  def test_invalid_position_falls_back_to_top_right
+    AndOne.dev_toast_position = :center
+    html = "<html><body></body></html>"
+    detections = trigger_detections
+
+    result = AndOne::DevToast.inject(html, detections)
+
+    assert_includes result, "top: 1rem"
+    assert_includes result, "right: 1rem"
+  end
+
   # --- Middleware integration tests ---
 
   def test_middleware_injects_toast_for_html_responses

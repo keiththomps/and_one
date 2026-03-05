@@ -8,9 +8,19 @@ module AndOne
   # or can be enabled manually:
   #   AndOne.dev_toast = true
   #
-  # The toast appears as a fixed-position badge in the bottom-right corner
-  # and auto-dismisses after 8 seconds (click to keep open).
+  # The toast appears as a fixed-position badge and auto-dismisses after
+  # 8 seconds (click to keep open).
+  #
+  # Position is configurable via `AndOne.dev_toast_position`:
+  #   :top_right (default), :top_left, :bottom_right, :bottom_left
   module DevToast
+    POSITIONS = {
+      top_right: { vertical: "top", horizontal: "right", slide_from: "-1rem" },
+      top_left: { vertical: "top", horizontal: "left", slide_from: "-1rem" },
+      bottom_right: { vertical: "bottom", horizontal: "right", slide_from: "1rem" },
+      bottom_left: { vertical: "bottom", horizontal: "left", slide_from: "1rem" }
+    }.freeze
+
     module_function
 
     # Injects toast HTML/JS/CSS before </body> in an HTML response.
@@ -33,6 +43,7 @@ module AndOne
       end.first(5)
 
       extra = count > 5 ? "<div class=\"and-one-toast-extra\">...and #{count - 5} more</div>" : ""
+      pos = POSITIONS[AndOne.dev_toast_position || :top_right] || POSITIONS[:top_right]
 
       <<~HTML
         <div id="and-one-toast" class="and-one-toast" role="status" aria-live="polite">
@@ -50,8 +61,8 @@ module AndOne
         <style>
           .and-one-toast {
             position: fixed;
-            bottom: 1rem;
-            right: 1rem;
+            #{pos[:vertical]}: 1rem;
+            #{pos[:horizontal]}: 1rem;
             z-index: 999999;
             background: #1a1a2e;
             color: #e0e0e0;
@@ -120,8 +131,8 @@ module AndOne
             text-decoration: underline;
           }
           @keyframes and-one-slide-in {
-            from { transform: translateY(1rem); opacity: 0; }
-            to   { transform: translateY(0);    opacity: 1; }
+            from { transform: translateY(#{pos[:slide_from]}); opacity: 0; }
+            to   { transform: translateY(0);                   opacity: 1; }
           }
         </style>
         <script>
