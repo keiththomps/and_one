@@ -259,6 +259,12 @@ AndOne.configure do |config|
   # Custom backtrace cleaner
   config.backtrace_cleaner = Rails.backtrace_cleaner
 
+  # Log all unique findings to a file (default: "log/and_one.log", nil to disable)
+  config.logfile = "log/and_one.log"
+
+  # Logfile format: :text or :json (default: :text)
+  config.logfile_format = :text
+
   # Custom callback for integrations (logging services, etc.)
   config.notifications_callback = ->(detections, message) {
     # detections is an array of AndOne::Detection objects
