@@ -16,7 +16,8 @@ module AndOne
                   :allow_stack_paths, :ignore_queries, :ignore_callers,
                   :min_n_queries, :notifications_callback,
                   :ignore_file_path, :json_logging, :env_thresholds,
-                  :dev_toast, :dev_toast_position
+                  :dev_toast, :dev_toast_position,
+                  :logfile, :logfile_format
 
     def configure
       yield self
@@ -88,6 +89,17 @@ module AndOne
     def aggregate
       @singleton_mutex.synchronize do
         @aggregate ||= Aggregate.new
+      end
+    end
+
+    def logfile_writer
+      return nil unless logfile
+
+      @singleton_mutex.synchronize do
+        @logfile_writer ||= LogfileWriter.new(
+          path: logfile,
+          format: logfile_format || :text
+        )
       end
     end
 
@@ -163,6 +175,9 @@ module AndOne
       # Record to aggregate and only report NEW unique detections
       detections = detections.select { |d| aggregate.record(d) }
       return if detections.empty?
+
+      # Buffer detections for logfile output (written on process exit)
+      logfile_writer&.record(detections)
 
       cleaner = backtrace_cleaner || default_backtrace_cleaner
 
@@ -267,6 +282,7 @@ require_relative "and_one/json_formatter"
 require_relative "and_one/association_resolver"
 require_relative "and_one/ignore_file"
 require_relative "and_one/aggregate"
+require_relative "and_one/logfile_writer"
 require_relative "and_one/matchers"
 require_relative "and_one/scan_helper"
 require_relative "and_one/dev_ui"
