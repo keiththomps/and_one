@@ -7,6 +7,18 @@ module AndOne
       if Rails.env.development? || Rails.env.test?
         AndOne.enabled = true
 
+        # Default logfile for collecting all findings
+        AndOne.logfile = "log/and_one.log" if AndOne.logfile.nil?
+
+        # Truncate stale findings from previous boot before workers fork
+        LogfileWriter.truncate!(AndOne.logfile)
+
+        at_exit do
+          AndOne.logfile_writer&.flush!
+        rescue StandardError
+          # Swallow errors during shutdown to avoid confusing output
+        end
+
         # In test, raise by default so N+1s fail the test suite
         AndOne.raise_on_detect = true if Rails.env.test?
 

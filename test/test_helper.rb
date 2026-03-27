@@ -70,9 +70,12 @@ module AndOneTestHelper
     AndOne.env_thresholds = nil
     AndOne.dev_toast = false
     AndOne.dev_toast_position = nil
+    AndOne.logfile = nil
+    AndOne.logfile_format = nil
     AndOne.ignore_file_path = nil
     AndOne.reload_ignore_file!
     AndOne.instance_variable_set(:@aggregate, nil)
+    AndOne.instance_variable_set(:@logfile_writer, nil)
 
     # Clear any leftover thread state
     Thread.current[:and_one_detector] = nil
