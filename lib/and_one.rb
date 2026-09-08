@@ -37,32 +37,19 @@ module AndOne
       return block_given? ? yield : nil if scanning?
 
       start_scan
-
       return unless block_given?
 
+      owned_detector = detector
       begin
         yield
-        detections = detector.finish
-        stop_scan
-        detections = apply_ignore_filter(detections)
-        report(detections) if detections.any?
-        detections
-      rescue Exception # rubocop:disable Lint/RescueException
-        # On error, clean up without reporting — don't add noise to real errors
-        detector&.send(:unsubscribe)
-        stop_scan
-        raise
+        finish_scan(owned_detector)
+      ensure
+        release_scan(owned_detector)
       end
     end
 
     def finish
-      return [] unless scanning?
-
-      detections = detector.finish
-      stop_scan
-      detections = apply_ignore_filter(detections)
-      report(detections) if detections.any?
-      detections
+      finish_scan(detector)
     end
 
     def scanning?
@@ -71,12 +58,12 @@ module AndOne
 
     def pause
       if block_given?
-        was_scanning = scanning?
+        was_paused = thread_state[:and_one_paused]
         thread_state[:and_one_paused] = true
         begin
           yield
         ensure
-          thread_state[:and_one_paused] = false if was_scanning
+          thread_state[:and_one_paused] = was_paused
         end
       else
         thread_state[:and_one_paused] = true
@@ -155,9 +142,29 @@ module AndOne
       end
     end
 
-    def stop_scan
-      thread_state[:and_one_detector] = nil
-      thread_state[:and_one_paused] = false
+    def finish_scan(owned_detector)
+      return [] unless owned_detector && detector.equal?(owned_detector)
+
+      begin
+        detections = owned_detector.finish
+      ensure
+        release_scan(owned_detector)
+      end
+      detections = apply_ignore_filter(detections)
+      report(detections) if detections.any?
+      detections
+    end
+
+    def release_scan(owned_detector)
+      owned_detector.send(:unsubscribe)
+    rescue StandardError
+      # Cleanup must not replace an application exception or nonlocal exit.
+      nil
+    ensure
+      if detector.equal?(owned_detector)
+        thread_state[:and_one_detector] = nil
+        thread_state[:and_one_paused] = false
+      end
     end
 
     def detector

@@ -306,6 +306,10 @@ AndOne.scan do
 end
 ```
 
+Block scans release their own detector on every exit, including exceptions, `return`, `break`, and `throw`. Only normal completion analyzes and reports findings. Nested scans pass through to the block without taking ownership of the outer scan. Nested pause blocks restore the previous pause state.
+
+For manual `AndOne.scan` / `AndOne.finish` pairs, the caller must invoke `finish` when done (including on exceptional paths, typically via `ensure`). `finish` releases the detector even if analysis or reporting raises; calling it with no active scan returns `[]`. Prefer the block API when application errors should bypass reporting.
+
 ## How It Works
 
 1. **Subscribe** to `sql.active_record` notifications (built into Rails)
