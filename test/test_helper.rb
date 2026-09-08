@@ -6,6 +6,8 @@ require "active_record"
 require "active_support"
 require "and_one"
 require "minitest/autorun"
+require "tmpdir"
+require "fileutils"
 
 # Set up an in-memory SQLite database for testing
 ActiveRecord::Base.establish_connection(
@@ -74,6 +76,8 @@ module AndOneTestHelper
     AndOne.logfile_format = nil
     AndOne.ignore_file_path = nil
     AndOne.reload_ignore_file!
+    @aggregate_tmpdir = Dir.mktmpdir("and_one_test")
+    AndOne.aggregate_path = @aggregate_tmpdir
     AndOne.instance_variable_set(:@aggregate, nil)
     AndOne.instance_variable_set(:@logfile_writer, nil)
 
@@ -86,5 +90,6 @@ module AndOneTestHelper
     super
     Thread.current[:and_one_detector] = nil
     Thread.current[:and_one_paused] = false
+    FileUtils.rm_rf(@aggregate_tmpdir) if @aggregate_tmpdir
   end
 end

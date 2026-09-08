@@ -14,7 +14,7 @@ AndOne stays completely invisible until it detects an N+1 query — then it tell
 - **Auto-raises in test** — N+1s fail your test suite by default
 - **Background job support** — ActiveJob (`around_perform`) and Sidekiq server middleware, with double-scan protection
 - **Ignore file** — `.and_one_ignore` with `gem:`, `path:`, `query:`, and `fingerprint:` rules
-- **Automatic deduplication** — each unique N+1 is reported once per server session with occurrence counts
+- **Automatic deduplication** — each unique N+1 is reported once per server session with occurrence counts, shared across all Puma workers via disk-based storage
 - **Test matchers** — Minitest (`assert_no_n_plus_one`) and RSpec (`expect { }.not_to cause_n_plus_one`)
 - **Dev toast notifications** — in-page toast on every page that triggers an N+1, with a link to the dashboard
 - **Dev UI dashboard** — browse `/__and_one` in development for a live N+1 overview
@@ -136,6 +136,8 @@ This is especially useful for **N+1s coming from gems** where you can't add `.in
 
 In development, the same N+1 can fire on every request, flooding your logs. AndOne automatically deduplicates — each unique pattern is reported only once per server session. Subsequent occurrences are silently counted.
 
+Deduplication applies to logs, GitHub annotations, logfile output, and `notifications_callback` (which receives only newly observed findings). Scan results still contain every non-ignored finding in that scan. When `raise_on_detect` is enabled, **every violating scan raises**, even if the pattern was already reported by another scan or matcher.
+
 You can check the session summary at any time:
 
 ```ruby
@@ -143,6 +145,8 @@ AndOne.aggregate.summary    # formatted string of all unique N+1s
 AndOne.aggregate.size       # number of unique patterns
 AndOne.aggregate.reset!     # clear and start fresh
 ```
+
+SQL normalization version 2 can change detection fingerprints. When upgrading, reset stale aggregate data and regenerate affected `fingerprint:` ignore entries. See [SQL fingerprints](docs/sql-fingerprints.md) for supported syntax, dialect limitations, and migration steps.
 
 ## Development UI
 
@@ -241,6 +245,9 @@ AndOne.configure do |config|
   # Options: :top_right, :top_left, :bottom_right, :bottom_left
   config.dev_toast_position = :top_right
 
+  # Aggregate storage path (default: Rails.root/tmp/and_one)
+  config.aggregate_path = Rails.root.join("tmp", "and_one").to_s
+
   # Path to ignore file (default: Rails.root/.and_one_ignore)
   config.ignore_file_path = Rails.root.join(".and_one_ignore").to_s
 
@@ -300,6 +307,10 @@ AndOne.scan do
   # Scanning resumes automatically after the pause block
 end
 ```
+
+Block scans release their own detector on every exit, including exceptions, `return`, `break`, and `throw`. Only normal completion analyzes and reports findings. Nested scans pass through to the block without taking ownership of the outer scan. Nested pause blocks restore the previous pause state.
+
+For manual `AndOne.scan` / `AndOne.finish` pairs, the caller must invoke `finish` when done (including on exceptional paths, typically via `ensure`). `finish` releases the detector even if analysis or reporting raises; calling it with no active scan returns `[]`. Prefer the block API when application errors should bypass reporting.
 
 ## How It Works
 

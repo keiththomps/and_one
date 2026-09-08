@@ -7,9 +7,10 @@ module AndOne
   class Detection
     attr_reader :queries, :caller_locations, :count, :adapter
 
-    def initialize(queries:, caller_locations:, count:, adapter: nil)
+    def initialize(queries:, count:, caller_locations: nil, raw_caller_strings: nil, adapter: nil)
       @queries = queries
       @caller_locations = caller_locations
+      @raw_caller_strings_override = raw_caller_strings
       @count = count
       @adapter = adapter
     end
@@ -30,14 +31,14 @@ module AndOne
     # For location-specific ignoring, use `path:` rules in .and_one_ignore.
     def fingerprint
       @fingerprint ||= begin
-        sql_fp = Fingerprint.generate(sample_query)
+        sql_fp = Fingerprint.generate(sample_query, adapter: adapter)
         Digest::SHA256.hexdigest("#{sql_fp}:#{table_name}")[0, 12]
       end
     end
 
     # The raw caller strings (before backtrace cleaning)
     def raw_caller_strings
-      @raw_caller_strings ||= caller_locations.map(&:to_s)
+      @raw_caller_strings ||= @raw_caller_strings_override || caller_locations&.map(&:to_s) || []
     end
 
     # The first frame in the call stack that is application code

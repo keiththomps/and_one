@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 require_relative "and_one/version"
+require_relative "and_one/reporting"
 
 module AndOne
   class NPlus1Error < StandardError; end
+
+  extend Reporting
 
   # Mutex for protecting lazy singleton initialization (aggregate, ignore_list)
   # and serializing report output so multi-line messages don't interleave
@@ -16,7 +19,7 @@ module AndOne
                   :allow_stack_paths, :ignore_queries, :ignore_callers,
                   :min_n_queries, :notifications_callback,
                   :ignore_file_path, :json_logging, :env_thresholds,
-                  :dev_toast, :dev_toast_position,
+                  :dev_toast, :dev_toast_position, :aggregate_path,
                   :logfile, :logfile_format
 
     def configure
@@ -34,30 +37,19 @@ module AndOne
       return block_given? ? yield : nil if scanning?
 
       start_scan
-
       return unless block_given?
 
+      owned_detector = detector
       begin
         yield
-        detections = detector.finish
-        stop_scan
-        report(detections) if detections.any?
-        detections
-      rescue Exception # rubocop:disable Lint/RescueException
-        # On error, clean up without reporting — don't add noise to real errors
-        detector&.send(:unsubscribe)
-        stop_scan
-        raise
+        finish_scan(owned_detector)
+      ensure
+        release_scan(owned_detector)
       end
     end
 
     def finish
-      return [] unless scanning?
-
-      detections = detector.finish
-      stop_scan
-      report(detections) if detections.any?
-      detections
+      finish_scan(detector)
     end
 
     def scanning?
@@ -66,12 +58,12 @@ module AndOne
 
     def pause
       if block_given?
-        was_scanning = scanning?
+        was_paused = thread_state[:and_one_paused]
         thread_state[:and_one_paused] = true
         begin
           yield
         ensure
-          thread_state[:and_one_paused] = false if was_scanning
+          thread_state[:and_one_paused] = was_paused
         end
       else
         thread_state[:and_one_paused] = true
@@ -88,7 +80,7 @@ module AndOne
 
     def aggregate
       @singleton_mutex.synchronize do
-        @aggregate ||= Aggregate.new
+        @aggregate ||= Aggregate.new(path: aggregate_path)
       end
     end
 
@@ -150,9 +142,29 @@ module AndOne
       end
     end
 
-    def stop_scan
-      thread_state[:and_one_detector] = nil
-      thread_state[:and_one_paused] = false
+    def finish_scan(owned_detector)
+      return [] unless owned_detector && detector.equal?(owned_detector)
+
+      begin
+        detections = owned_detector.finish
+      ensure
+        release_scan(owned_detector)
+      end
+      detections = apply_ignore_filter(detections)
+      report(detections) if detections.any?
+      detections
+    end
+
+    def release_scan(owned_detector)
+      owned_detector.send(:unsubscribe)
+    rescue StandardError
+      # Cleanup must not replace an application exception or nonlocal exit.
+      nil
+    ensure
+      if detector.equal?(owned_detector)
+        thread_state[:and_one_detector] = nil
+        thread_state[:and_one_paused] = false
+      end
     end
 
     def detector
@@ -163,63 +175,10 @@ module AndOne
       Thread.current
     end
 
-    def report(detections) # rubocop:disable Metrics
-      # Filter out ignored detections
-      detections = detections.reject do |d|
+    def apply_ignore_filter(detections)
+      detections.reject do |d|
         ignore_list.ignored?(d, d.raw_caller_strings) ||
           caller_ignored?(d.raw_caller_strings)
-      end
-
-      return if detections.empty?
-
-      # Record to aggregate and only report NEW unique detections
-      detections = detections.select { |d| aggregate.record(d) }
-      return if detections.empty?
-
-      # Buffer detections for logfile output (written on process exit)
-      logfile_writer&.record(detections)
-
-      cleaner = backtrace_cleaner || default_backtrace_cleaner
-
-      formatter = Formatter.new(backtrace_cleaner: cleaner)
-      message = formatter.format(detections)
-
-      # Serialize all output through a mutex so multi-line messages
-      # from concurrent Puma threads don't interleave.
-      @report_mutex.synchronize do
-        # JSON logging for log aggregation services
-        if json_logging
-          json_formatter = JsonFormatter.new(backtrace_cleaner: cleaner)
-          json_output = json_formatter.format(detections)
-
-          if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
-            Rails.logger.warn(json_output)
-          else
-            warn(json_output)
-          end
-        end
-
-        notifications_callback&.call(detections, message)
-
-        # GitHub Actions annotations
-        if ENV["GITHUB_ACTIONS"]
-          detections.each do |d|
-            file, line = parse_frame_location(d.fix_location || d.origin_frame)
-            query_count = "#{d.count} queries to `#{d.table_name || "unknown"}`"
-            if file
-              $stdout.puts "::warning file=#{file},line=#{line || 1}::N+1 detected: #{query_count}. Add `.includes(:#{suggest_association_name(d)})` to fix."
-            else
-              $stdout.puts "::warning ::N+1 detected: #{query_count}."
-            end
-          end
-        end
-
-        raise NPlus1Error, "\n#{message}" if raise_on_detect
-
-        unless json_logging
-          Rails.logger.warn("\n#{message}") if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
-          warn("\n#{message}") if $stderr.tty?
-        end
       end
     end
 

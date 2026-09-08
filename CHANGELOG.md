@@ -1,5 +1,30 @@
 ## [Unreleased]
 
+### Fixed
+
+- Enforce `raise_on_detect` for every violating scan, independently of first-occurrence reporting and aggregate history (#2).
+- Release owned scans on exceptions and nonlocal exits; preserve outer scans and nested pause state (#3).
+- Tokenize SQL before fingerprint normalization, fixing PostgreSQL bind placeholders and comment characters inside quoted text (#4). Preserve quoted identifiers and structural distinctions.
+
+### Changed
+
+- **Fingerprint migration:** normalization version 2 can change detection IDs. Reset stale aggregate data and regenerate affected `fingerprint:` ignore rules. See [SQL fingerprints](docs/sql-fingerprints.md) for details and dialect limitations.
+
+## [0.4.0] - 2026-03-05
+
+### Fixed
+
+- **Toast now respects ignore rules** — Previously, the dev toast showed all detected N+1s including ones filtered by `.and_one_ignore` or `ignore_callers`. The toast, dashboard, and log output now all show the same filtered set of detections. This also applies to the return value of `AndOne.scan { }` and `AndOne.finish`.
+
+### Changed
+
+- **Disk-based aggregate storage** — The aggregate now stores detections as JSON on disk (`tmp/and_one/` in Rails apps) instead of in-process memory. This means all Puma workers in a multi-process deployment share the same dashboard data. The aggregate is automatically reset on server boot. Configure a custom path with `AndOne.aggregate_path`.
+
+### Added
+
+- `AndOne.aggregate_path` configuration option for custom aggregate storage location
+- `Detection` now supports construction from raw caller strings (for deserialization from disk)
+
 ## [0.3.1] - 2026-03-05
 
 ### Added

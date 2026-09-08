@@ -10,8 +10,6 @@ module AndOne
   # detected N+1s are injected as a toast notification into HTML responses
   # with a link to the DevUI dashboard.
   class Middleware
-    include ScanHelper
-
     def initialize(app)
       @app = app
     end
@@ -19,23 +17,17 @@ module AndOne
     def call(env)
       return @app.call(env) if !AndOne.enabled? || AndOne.scanning?
 
-      begin
-        AndOne.scan
-        status, headers, body = @app.call(env)
-        detections = AndOne.finish
+      status = headers = body = nil
+      detections = AndOne.scan { status, headers, body = @app.call(env) }
 
-        if AndOne.dev_toast && detections&.any? && html_response?(headers) && status == 200
-          body = inject_toast(body, detections)
-          # Recalculate Content-Length since we modified the body
-          headers.delete("content-length")
-          headers.delete("Content-Length")
-        end
-
-        [status, headers, body]
-      rescue Exception # rubocop:disable Lint/RescueException
-        and_one_quietly_stop
-        raise
+      if AndOne.dev_toast && detections&.any? && html_response?(headers) && status == 200
+        body = inject_toast(body, detections)
+        # Recalculate Content-Length since we modified the body
+        headers.delete("content-length")
+        headers.delete("Content-Length")
       end
+
+      [status, headers, body]
     end
 
     private
