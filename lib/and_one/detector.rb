@@ -114,7 +114,7 @@ module AndOne
         next unless callers
 
         # Group by fingerprint to confirm they're actually the same query shape
-        grouped = queries.group_by { |q| Fingerprint.generate(q) }
+        grouped = queries.group_by { |q| Fingerprint.generate(q, adapter: metadata[:connection_adapter]) }
         repeated = grouped.values.select { |group| group.size >= @min_n_queries }
 
         next if repeated.empty?

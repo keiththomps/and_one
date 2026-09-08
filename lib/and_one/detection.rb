@@ -31,7 +31,7 @@ module AndOne
     # For location-specific ignoring, use `path:` rules in .and_one_ignore.
     def fingerprint
       @fingerprint ||= begin
-        sql_fp = Fingerprint.generate(sample_query)
+        sql_fp = Fingerprint.generate(sample_query, adapter: adapter)
         Digest::SHA256.hexdigest("#{sql_fp}:#{table_name}")[0, 12]
       end
     end

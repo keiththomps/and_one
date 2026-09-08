@@ -146,6 +146,8 @@ AndOne.aggregate.size       # number of unique patterns
 AndOne.aggregate.reset!     # clear and start fresh
 ```
 
+SQL normalization version 2 can change detection fingerprints. When upgrading, reset stale aggregate data and regenerate affected `fingerprint:` ignore entries. See [SQL fingerprints](docs/sql-fingerprints.md) for supported syntax, dialect limitations, and migration steps.
+
 ## Development UI
 
 ### In-page toast notifications

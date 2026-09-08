@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+### Fixed
+
+- Enforce `raise_on_detect` for every violating scan, independently of first-occurrence reporting and aggregate history (#2).
+- Release owned scans on exceptions and nonlocal exits; preserve outer scans and nested pause state (#3).
+- Tokenize SQL before fingerprint normalization, fixing PostgreSQL bind placeholders and comment characters inside quoted text (#4). Preserve quoted identifiers and structural distinctions.
+
+### Changed
+
+- **Fingerprint migration:** normalization version 2 can change detection IDs. Reset stale aggregate data and regenerate affected `fingerprint:` ignore rules. See [SQL fingerprints](docs/sql-fingerprints.md) for details and dialect limitations.
+
 ## [0.4.0] - 2026-03-05
 
 ### Fixed
