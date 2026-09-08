@@ -11,4 +11,5 @@ gem "rubocop", "~> 1.21"
 
 # Test dependencies — these are what Rails provides, not external deps
 gem "rails", ">= 7.0"
+gem "rspec", "~> 3.13"
 gem "sqlite3"
