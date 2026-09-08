@@ -66,7 +66,7 @@ class TestMinitestHelper < Minitest::Test
 
   def test_matchers_dont_interfere_with_raise_on_detect
     # Even if raise_on_detect is true, matchers should work normally
-    # (they temporarily disable it internally)
+    # (their capture scope skips reporting without changing global settings)
     AndOne.raise_on_detect = true
 
     assert_no_n_plus_one do

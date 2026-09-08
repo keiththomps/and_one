@@ -38,6 +38,31 @@ end
 
 That's it. AndOne automatically activates in development and test environments via a Railtie.
 
+## Ruby and ORM support
+
+AndOne requires Ruby 3.2+ and ActiveRecord/ActiveSupport/Railties 7.0+ (choose versions compatible with your Ruby). Rails applications get automatic request/job integration. Outside a Rails application, “plain Ruby” support means **ActiveRecord SQL instrumentation**, not arbitrary database clients or other ORMs such as Sequel. Railties remains a runtime dependency; RSpec is optional and only needed for `and_one/rspec`. No public RBS signatures are currently shipped.
+
+A standalone script can use:
+
+```ruby
+require "and_one"       # loads its ActiveRecord and Railtie dependencies itself
+require "sqlite3"       # install your chosen database adapter separately
+
+ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: "app.sqlite3")
+# Define/load your ActiveRecord models, e.g. Post has_many :comments.
+AndOne.configure do |config|
+  config.enabled = true
+  config.raise_on_detect = false
+end
+
+detections = AndOne.scan do
+  Post.all.each { |post| post.comments.to_a }
+end
+puts "Detected #{detections.size} repeated-query patterns"
+```
+
+Standalone scans are enabled by default and do not raise unless configured. They do not install request/job hooks or Rails environment defaults until a Rails application boots. Normal scans persist findings under `tmp/and_one` by default; set `aggregate_path` before the first scan to change it. `require "and_one"` is safe before or after loading Rails.
+
 ## What You'll See
 
 When an N+1 is detected, you get output like:
@@ -136,7 +161,7 @@ This is especially useful for **N+1s coming from gems** where you can't add `.in
 
 In development, the same N+1 can fire on every request, flooding your logs. AndOne automatically deduplicates — each unique pattern is reported only once per server session. Subsequent occurrences are silently counted.
 
-Deduplication applies to logs, GitHub annotations, logfile output, and `notifications_callback` (which receives only newly observed findings). Scan results still contain every non-ignored finding in that scan. When `raise_on_detect` is enabled, **every violating scan raises**, even if the pattern was already reported by another scan or matcher.
+Deduplication applies to logs, GitHub annotations, logfile output, and `notifications_callback` (which receives only newly observed findings). Scan results still contain every non-ignored finding in that scan. When `raise_on_detect` is enabled, **every violating scan raises**, even if the pattern was already reported by another scan. Test matchers do not report or consume first-occurrence deduplication.
 
 You can check the session summary at any time:
 
@@ -199,7 +224,7 @@ end
 
 ```ruby
 # In spec_helper.rb or rails_helper.rb
-require "and_one/rspec"
+require "and_one/rspec" # loads RSpec core and registers the helper, in either require order
 
 # Then in your specs
 RSpec.describe "Posts" do
@@ -217,7 +242,9 @@ RSpec.describe "Posts" do
 end
 ```
 
-The matchers temporarily disable `raise_on_detect` internally, so they work correctly regardless of your global configuration.
+Matchers capture a non-reporting scan: they never change global configuration, invoke callbacks, write findings, or raise `NPlus1Error`. Other concurrent scans retain their configured reporting and enforcement. Ignores and `enabled = false` still apply (disabled matchers execute the block but see no detections).
+
+Starting a matcher inside an already active scan raises `ArgumentError` **before executing its block**. Put the matcher around the request/job or scan instead; ordinary nested request/job scans still pass through to the matcher's scope. Both successful Minitest helpers count one assertion.
 
 ## Behavior by Environment
 

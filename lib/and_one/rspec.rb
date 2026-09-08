@@ -11,10 +11,9 @@
 #   end
 #
 
+require "rspec/core"
 require "and_one"
 
-if defined?(RSpec)
-  RSpec.configure do |config|
-    config.include AndOne::RSpecHelper
-  end
+RSpec.configure do |config|
+  config.include AndOne::RSpecHelper
 end

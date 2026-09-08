@@ -2,12 +2,16 @@
 
 ### Fixed
 
+- Load runtime dependencies explicitly for standalone ActiveRecord use and register Rails/RSpec integrations safely in either require order (#18).
+- Keep test matcher capture scan-local without mutating global reporting settings; count successful Minitest assertions and reject matchers inside active scans with a clear error (#13).
 - Enforce `raise_on_detect` for every violating scan, independently of first-occurrence reporting and aggregate history (#2).
 - Release owned scans on exceptions and nonlocal exits; preserve outer scans and nested pause state (#3).
 - Tokenize SQL before fingerprint normalization, fixing PostgreSQL bind placeholders and comment characters inside quoted text (#4). Preserve quoted identifiers and structural distinctions.
 
 ### Changed
 
+- Package only runtime Ruby files and documentation; remove the placeholder RBS file (#18).
+- Matchers no longer report or consume aggregate deduplication; ignores and disabled-state behavior still apply (#13).
 - **Fingerprint migration:** normalization version 2 can change detection IDs. Reset stale aggregate data and regenerate affected `fingerprint:` ignore rules. See [SQL fingerprints](docs/sql-fingerprints.md) for details and dialect limitations.
 
 ## [0.4.0] - 2026-03-05

@@ -1,12 +1,18 @@
 # frozen_string_literal: true
 
+require "logger"
+require "active_record"
+require "rails/railtie"
+
 require_relative "and_one/version"
+require_relative "and_one/test_capture"
 require_relative "and_one/reporting"
 
 module AndOne
   class NPlus1Error < StandardError; end
 
   extend Reporting
+  extend TestCapture
 
   # Mutex for protecting lazy singleton initialization (aggregate, ignore_list)
   # and serializing report output so multi-line messages don't interleave
@@ -142,7 +148,7 @@ module AndOne
       end
     end
 
-    def finish_scan(owned_detector)
+    def finish_scan(owned_detector, reporting: true)
       return [] unless owned_detector && detector.equal?(owned_detector)
 
       begin
@@ -151,7 +157,7 @@ module AndOne
         release_scan(owned_detector)
       end
       detections = apply_ignore_filter(detections)
-      report(detections) if detections.any?
+      report(detections) if reporting && detections.any?
       detections
     end
 

@@ -18,7 +18,7 @@ module AndOne
     def assert_no_n_plus_one(message = nil, &)
       detections = scan_for_n_plus_ones(&)
 
-      return unless detections.any?
+      return assert(true) if detections.empty?
 
       formatter = Formatter.new(
         backtrace_cleaner: AndOne.backtrace_cleaner || AndOne.send(:default_backtrace_cleaner)
@@ -40,25 +40,14 @@ module AndOne
         flunk(msg)
       end
 
+      assert(true)
       detections
     end
 
     private
 
     def scan_for_n_plus_ones(&)
-      # Temporarily disable raise_on_detect so scan returns detections
-      # instead of raising
-      previous_raise = AndOne.raise_on_detect
-      previous_callback = AndOne.notifications_callback
-      AndOne.raise_on_detect = false
-      AndOne.notifications_callback = nil
-
-      begin
-        AndOne.scan(&) || []
-      ensure
-        AndOne.raise_on_detect = previous_raise
-        AndOne.notifications_callback = previous_callback
-      end
+      AndOne.capture_for_test(&)
     end
   end
 
@@ -113,17 +102,7 @@ module AndOne
       private
 
       def scan_block(block)
-        previous_raise = AndOne.raise_on_detect
-        previous_callback = AndOne.notifications_callback
-        AndOne.raise_on_detect = false
-        AndOne.notifications_callback = nil
-
-        begin
-          AndOne.scan { block.call } || []
-        ensure
-          AndOne.raise_on_detect = previous_raise
-          AndOne.notifications_callback = previous_callback
-        end
+        AndOne.capture_for_test(&block)
       end
     end
   end
