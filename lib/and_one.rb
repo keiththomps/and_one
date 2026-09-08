@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 require_relative "and_one/version"
+require_relative "and_one/reporting"
 
 module AndOne
   class NPlus1Error < StandardError; end
+
+  extend Reporting
 
   # Mutex for protecting lazy singleton initialization (aggregate, ignore_list)
   # and serializing report output so multi-line messages don't interleave
@@ -163,58 +166,6 @@ module AndOne
 
     def thread_state
       Thread.current
-    end
-
-    def report(detections) # rubocop:disable Metrics
-      # Record to aggregate and only report NEW unique detections
-      detections = detections.select { |d| aggregate.record(d) }
-      return if detections.empty?
-
-      # Buffer detections for logfile output (written on process exit)
-      logfile_writer&.record(detections)
-
-      cleaner = backtrace_cleaner || default_backtrace_cleaner
-
-      formatter = Formatter.new(backtrace_cleaner: cleaner)
-      message = formatter.format(detections)
-
-      # Serialize all output through a mutex so multi-line messages
-      # from concurrent Puma threads don't interleave.
-      @report_mutex.synchronize do
-        # JSON logging for log aggregation services
-        if json_logging
-          json_formatter = JsonFormatter.new(backtrace_cleaner: cleaner)
-          json_output = json_formatter.format(detections)
-
-          if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
-            Rails.logger.warn(json_output)
-          else
-            warn(json_output)
-          end
-        end
-
-        notifications_callback&.call(detections, message)
-
-        # GitHub Actions annotations
-        if ENV["GITHUB_ACTIONS"]
-          detections.each do |d|
-            file, line = parse_frame_location(d.fix_location || d.origin_frame)
-            query_count = "#{d.count} queries to `#{d.table_name || "unknown"}`"
-            if file
-              $stdout.puts "::warning file=#{file},line=#{line || 1}::N+1 detected: #{query_count}. Add `.includes(:#{suggest_association_name(d)})` to fix."
-            else
-              $stdout.puts "::warning ::N+1 detected: #{query_count}."
-            end
-          end
-        end
-
-        raise NPlus1Error, "\n#{message}" if raise_on_detect
-
-        unless json_logging
-          Rails.logger.warn("\n#{message}") if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
-          warn("\n#{message}") if $stderr.tty?
-        end
-      end
     end
 
     def apply_ignore_filter(detections)

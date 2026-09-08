@@ -136,6 +136,8 @@ This is especially useful for **N+1s coming from gems** where you can't add `.in
 
 In development, the same N+1 can fire on every request, flooding your logs. AndOne automatically deduplicates — each unique pattern is reported only once per server session. Subsequent occurrences are silently counted.
 
+Deduplication applies to logs, GitHub annotations, logfile output, and `notifications_callback` (which receives only newly observed findings). Scan results still contain every non-ignored finding in that scan. When `raise_on_detect` is enabled, **every violating scan raises**, even if the pattern was already reported by another scan or matcher.
+
 You can check the session summary at any time:
 
 ```ruby
