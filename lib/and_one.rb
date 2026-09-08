@@ -16,7 +16,7 @@ module AndOne
                   :allow_stack_paths, :ignore_queries, :ignore_callers,
                   :min_n_queries, :notifications_callback,
                   :ignore_file_path, :json_logging, :env_thresholds,
-                  :dev_toast, :dev_toast_position,
+                  :dev_toast, :dev_toast_position, :aggregate_path,
                   :logfile, :logfile_format
 
     def configure
@@ -41,6 +41,7 @@ module AndOne
         yield
         detections = detector.finish
         stop_scan
+        detections = apply_ignore_filter(detections)
         report(detections) if detections.any?
         detections
       rescue Exception # rubocop:disable Lint/RescueException
@@ -56,6 +57,7 @@ module AndOne
 
       detections = detector.finish
       stop_scan
+      detections = apply_ignore_filter(detections)
       report(detections) if detections.any?
       detections
     end
@@ -88,7 +90,7 @@ module AndOne
 
     def aggregate
       @singleton_mutex.synchronize do
-        @aggregate ||= Aggregate.new
+        @aggregate ||= Aggregate.new(path: aggregate_path)
       end
     end
 
@@ -164,14 +166,6 @@ module AndOne
     end
 
     def report(detections) # rubocop:disable Metrics
-      # Filter out ignored detections
-      detections = detections.reject do |d|
-        ignore_list.ignored?(d, d.raw_caller_strings) ||
-          caller_ignored?(d.raw_caller_strings)
-      end
-
-      return if detections.empty?
-
       # Record to aggregate and only report NEW unique detections
       detections = detections.select { |d| aggregate.record(d) }
       return if detections.empty?
@@ -220,6 +214,13 @@ module AndOne
           Rails.logger.warn("\n#{message}") if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
           warn("\n#{message}") if $stderr.tty?
         end
+      end
+    end
+
+    def apply_ignore_filter(detections)
+      detections.reject do |d|
+        ignore_list.ignored?(d, d.raw_caller_strings) ||
+          caller_ignored?(d.raw_caller_strings)
       end
     end
 

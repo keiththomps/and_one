@@ -19,6 +19,9 @@ module AndOne
           # Swallow errors during shutdown to avoid confusing output
         end
 
+        # Reset aggregate on server boot for a fresh session
+        AndOne.aggregate.reset!
+
         # In test, raise by default so N+1s fail the test suite
         AndOne.raise_on_detect = true if Rails.env.test?
 

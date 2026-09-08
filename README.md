@@ -14,7 +14,7 @@ AndOne stays completely invisible until it detects an N+1 query — then it tell
 - **Auto-raises in test** — N+1s fail your test suite by default
 - **Background job support** — ActiveJob (`around_perform`) and Sidekiq server middleware, with double-scan protection
 - **Ignore file** — `.and_one_ignore` with `gem:`, `path:`, `query:`, and `fingerprint:` rules
-- **Automatic deduplication** — each unique N+1 is reported once per server session with occurrence counts
+- **Automatic deduplication** — each unique N+1 is reported once per server session with occurrence counts, shared across all Puma workers via disk-based storage
 - **Test matchers** — Minitest (`assert_no_n_plus_one`) and RSpec (`expect { }.not_to cause_n_plus_one`)
 - **Dev toast notifications** — in-page toast on every page that triggers an N+1, with a link to the dashboard
 - **Dev UI dashboard** — browse `/__and_one` in development for a live N+1 overview
@@ -240,6 +240,9 @@ AndOne.configure do |config|
   # Toast position (default: :top_right)
   # Options: :top_right, :top_left, :bottom_right, :bottom_left
   config.dev_toast_position = :top_right
+
+  # Aggregate storage path (default: Rails.root/tmp/and_one)
+  config.aggregate_path = Rails.root.join("tmp", "and_one").to_s
 
   # Path to ignore file (default: Rails.root/.and_one_ignore)
   config.ignore_file_path = Rails.root.join(".and_one_ignore").to_s

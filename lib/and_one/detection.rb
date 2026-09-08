@@ -7,9 +7,10 @@ module AndOne
   class Detection
     attr_reader :queries, :caller_locations, :count, :adapter
 
-    def initialize(queries:, caller_locations:, count:, adapter: nil)
+    def initialize(queries:, count:, caller_locations: nil, raw_caller_strings: nil, adapter: nil)
       @queries = queries
       @caller_locations = caller_locations
+      @raw_caller_strings_override = raw_caller_strings
       @count = count
       @adapter = adapter
     end
@@ -37,7 +38,7 @@ module AndOne
 
     # The raw caller strings (before backtrace cleaning)
     def raw_caller_strings
-      @raw_caller_strings ||= caller_locations.map(&:to_s)
+      @raw_caller_strings ||= @raw_caller_strings_override || caller_locations&.map(&:to_s) || []
     end
 
     # The first frame in the call stack that is application code

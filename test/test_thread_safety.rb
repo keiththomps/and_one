@@ -208,7 +208,8 @@ class TestThreadSafety < Minitest::Test
   # Verify aggregate.record is atomic — concurrent record calls should
   # not lose counts.
   def test_aggregate_record_atomicity
-    aggregate = AndOne::Aggregate.new
+    atomicity_dir = Dir.mktmpdir("and_one_atomicity")
+    aggregate = AndOne::Aggregate.new(path: atomicity_dir)
 
     # Get a real detection to use
     detections = AndOne.scan do
@@ -229,6 +230,8 @@ class TestThreadSafety < Minitest::Test
     expected = THREAD_COUNT * record_count
     assert_equal expected, entry.occurrences,
                  "Expected #{expected} occurrences, got #{entry.occurrences} (lost updates!)"
+  ensure
+    FileUtils.rm_rf(atomicity_dir)
   end
 
   # Verify that notifications_callback is called safely from concurrent threads.
