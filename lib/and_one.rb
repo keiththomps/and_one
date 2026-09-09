@@ -218,15 +218,6 @@ module AndOne
       end
     end
 
-    def suggest_association_name(detection)
-      suggestion = begin
-        AssociationResolver.resolve(detection, detection.raw_caller_strings)
-      rescue StandardError
-        nil
-      end
-      suggestion&.association_name || detection.table_name || "association"
-    end
-
     def resolve_ignore_file_path
       return ignore_file_path if ignore_file_path
 

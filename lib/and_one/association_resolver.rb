@@ -1,219 +1,91 @@
 # frozen_string_literal: true
 
+require_relative "query_evidence"
+require_relative "suggestion"
+
 module AndOne
-  # Resolves table names back to ActiveRecord models and identifies
-  # which association is being N+1 loaded, then suggests a fix.
+  # SQL provides candidates, not proof of which Ruby association was called.
   module AssociationResolver
     module_function
 
-    # Given a table name and a cleaned backtrace, attempt to identify
-    # the model, the parent association, and suggest an includes() fix.
     def resolve(detection, cleaned_backtrace)
-      table = detection.table_name
-      return nil unless table
+      evidence = QueryEvidence.new(detection.sample_query, adapter: detection.adapter)
+      target = model_for_table(detection.table_name)
+      return nil unless target
 
-      target_model = model_for_table(table)
-      return nil unless target_model
-
-      # Find the originating code location (first app frame in the backtrace)
-      origin_frame = find_origin_frame(cleaned_backtrace)
-
-      # Look for the parent model that has an association to the target
-      suggestion = find_association_suggestion(target_model, detection.sample_query)
-
+      candidates = evidence.operation == :records ? association_candidates(target, evidence) : []
+      parent, association = candidates.first if candidates.one?
       Suggestion.new(
-        target_model: target_model,
-        origin_frame: origin_frame,
-        association_name: suggestion&.dig(:association_name),
-        parent_model: suggestion&.dig(:parent_model),
-        fix_hint: suggestion&.dig(:fix_hint),
-        loading_strategy: suggestion&.dig(:loading_strategy),
-        is_through: suggestion&.dig(:is_through) || false,
-        is_polymorphic: suggestion&.dig(:is_polymorphic) || false
+        target_model: target, origin_frame: cleaned_backtrace&.first,
+        parent_model: parent, association_name: association&.name,
+        association_type: association&.macro, operation: evidence.operation,
+        loading_strategy: association && evidence.operation == :records ? :includes : nil,
+        fix_hint: recommendation(evidence.operation, parent, association)
       )
     end
 
-    # Maps table name -> AR model class.
-    # Thread-safe: uses a Mutex to protect the shared cache since multiple
-    # Puma threads may resolve associations concurrently.
+    # Deliberately uncached: misses must not survive lazy loading and classes or
+    # reflections must not survive a Rails reload. Ignore stale descendant objects
+    # whose constants have been removed/replaced by the reloader.
+    def models
+      ActiveRecord::Base.descendants.select do |klass|
+        klass.name && !klass.abstract_class? && klass.name.safe_constantize.equal?(klass)
+      end
+    end
+
     def model_for_table(table_name)
-      @table_model_mutex ||= Mutex.new
-      @table_model_cache ||= {}
+      return nil unless table_name
 
-      # Fast path: read from cache without lock (safe because we never delete keys,
-      # and Hash#[] under GVL is atomic for existing keys)
-      return @table_model_cache[table_name] if @table_model_cache.key?(table_name)
+      matches = models.select { |klass| klass.table_name == table_name }
+      matches.first if matches.one?
+    end
 
-      @table_model_mutex.synchronize do
-        # Double-check after acquiring lock
-        return @table_model_cache[table_name] if @table_model_cache.key?(table_name)
+    def association_candidates(target, evidence)
+      return [] unless evidence.simple?
 
-        model = ActiveRecord::Base.descendants.detect do |klass|
-          klass.table_name == table_name
-        rescue StandardError
-          false
+      models.flat_map do |parent|
+        parent.reflect_on_all_associations.filter_map do |association|
+          [parent, association] if association_matches?(association, target, evidence)
         end
-
-        @table_model_cache[table_name] = model
-        model
       end
     end
 
-    # Finds the first backtrace frame that's in the app (not a gem/framework frame)
-    def find_origin_frame(cleaned_backtrace)
-      cleaned_backtrace&.first
-    end
+    def association_matches?(association, target, evidence)
+      return false unless %i[belongs_to has_one has_many].include?(association.macro)
+      return false if association.is_a?(ActiveRecord::Reflection::ThroughReflection)
+      return false if association.polymorphic? || association.options[:as]
+      return false unless association.klass == target
 
-    # Tries to find which association on a parent model points to the target model,
-    # and extracts hints from the WHERE clause about the foreign key.
-    def find_association_suggestion(target_model, sql)
-      # Extract the foreign key column from WHERE clause
-      # e.g., WHERE "comments"."post_id" = ? or WHERE "comments"."post_id" IN (?)
-      foreign_key = extract_foreign_key(sql, target_model.table_name)
+      key = if association.macro == :belongs_to
+              association.association_primary_key
+            else
+              association.foreign_key
+            end
+      return false if key.is_a?(Array)
 
-      # Also try polymorphic foreign key pattern (e.g., commentable_id)
-      poly_foreign_key = extract_polymorphic_foreign_key(sql, target_model.table_name) unless foreign_key
-
-      effective_key = foreign_key || poly_foreign_key
-
-      # Search all models for an association whose foreign key matches
-      ActiveRecord::Base.descendants.each do |klass|
-        next if klass.abstract_class?
-
-        klass.reflect_on_all_associations.each do |assoc|
-          matched = if effective_key
-                      association_matches?(assoc, target_model, effective_key)
-                    else
-                      # For through associations, foreign key may not be directly visible
-                      through_association_matches?(assoc, target_model)
-                    end
-
-          next unless matched
-
-          strategy = loading_strategy(sql, assoc.name)
-
-          return {
-            parent_model: klass,
-            association_name: assoc.name,
-            fix_hint: build_fix_hint(klass, assoc.name),
-            loading_strategy: strategy,
-            is_through: assoc.is_a?(ActiveRecord::Reflection::ThroughReflection),
-            is_polymorphic: assoc.respond_to?(:options) && !assoc.options[:as].nil?
-          }
-        end
-      rescue StandardError
-        next
-      end
-
-      nil
-    end
-
-    def through_association_matches?(assoc, target_model)
-      return false unless assoc.is_a?(ActiveRecord::Reflection::ThroughReflection)
-
-      begin
-        assoc.klass == target_model
-      rescue NameError
-        false
-      end
-    end
-
-    def extract_polymorphic_foreign_key(sql, table_name)
-      # Match patterns like: "table"."something_type" = AND "table"."something_id"
-      pattern = /["`]?#{Regexp.escape(table_name)}["`]?\.["`]?(\w+)_type["`]?\s*=/i
-      match = sql.match(pattern)
-      "#{match.captures.first}_id" if match
-    end
-
-    def extract_foreign_key(sql, table_name)
-      # Match patterns like: "table"."column_id" = or "table"."column_id" IN
-      pattern = /["`]?#{Regexp.escape(table_name)}["`]?\.["`]?(\w+_id)["`]?\s*(?:=|IN)/i
-      match = sql.match(pattern)
-      match&.captures&.first
-    end
-
-    def association_matches?(assoc, target_model, foreign_key)
-      case assoc
-      when ActiveRecord::Reflection::ThroughReflection
-        # has_many :through — check if the source association points to our target
-        assoc.klass == target_model
-      when ActiveRecord::Reflection::HasManyReflection,
-           ActiveRecord::Reflection::HasOneReflection
-        if assoc.options[:as]
-          # Polymorphic: has_many :comments, as: :commentable
-          # The foreign key is like "commentable_id" and there's a "commentable_type" column
-          poly_fk = "#{assoc.options[:as]}_id"
-          assoc.klass == target_model && poly_fk == foreign_key
-        else
-          assoc.klass == target_model && assoc.foreign_key.to_s == foreign_key
-        end
-      else
-        false
-      end
+      evidence.predicate_columns(target.table_name).include?(key.to_s)
     rescue NameError
       false
     end
 
-    def build_fix_hint(parent_model, association_name)
-      "Add `.includes(:#{association_name})` to your #{parent_model.name} query"
-    end
-
-    # Determine the optimal loading strategy based on query patterns
-    def loading_strategy(sql, _association_name)
-      # If the query has WHERE conditions on the association table, eager_load
-      # is better because it does a LEFT OUTER JOIN allowing WHERE filtering
-      if sql =~ /\bWHERE\b/i && (sql =~ /\bJOIN\b/i || sql =~ /\b(?:AND|OR)\b/i)
-        :eager_load
+    def recommendation(operation, parent, association)
+      case operation
+      when :count
+        "For COUNT, consider a counter cache or grouped counts; use .size only on an already loaded association " \
+        "when loading all records is acceptable. includes alone does not eliminate .count queries."
+      when :exists
+        "For existence checks, consider batching matching keys; verify equivalent scope and NULL semantics."
+      when :scalar
+        "For scalar lookups, consider a grouped/batched query; SQL alone cannot identify an association fix."
+      when :records
+        if association
+          "If this is #{parent.name}##{association.name} record loading, try `.includes(:#{association.name})` " \
+            "or `.preload(:#{association.name})` on the parent query; verify scopes and results."
+        else
+          "Association is ambiguous or unsupported from SQL alone; inspect the call site before choosing a preload."
+        end
       else
-        # Default: preload is generally faster (separate queries, no JOIN overhead)
-        # includes is the safe default that lets Rails choose
-        :includes
-      end
-    end
-  end
-
-  class Suggestion
-    attr_reader :target_model, :origin_frame, :association_name, :parent_model,
-                :fix_hint, :loading_strategy, :is_through, :is_polymorphic
-
-    def initialize(target_model:, origin_frame:, association_name:, parent_model:,
-                   fix_hint:, loading_strategy: nil, is_through: false, is_polymorphic: false)
-      @target_model = target_model
-      @origin_frame = origin_frame
-      @association_name = association_name
-      @parent_model = parent_model
-      @fix_hint = fix_hint
-      @loading_strategy = loading_strategy
-      @is_through = is_through
-      @is_polymorphic = is_polymorphic
-    end
-
-    def actionable?
-      !!@association_name
-    end
-
-    # Suggest strict_loading as an alternative prevention strategy
-    def strict_loading_hint
-      return nil unless actionable? && @parent_model
-
-      assoc_type = if @is_through
-                     "has_many :#{@association_name}, through: ..."
-                   else
-                     "has_many :#{@association_name}"
-                   end
-
-      "Or prevent at the model level: `#{assoc_type}, strict_loading: true` in #{@parent_model.name}"
-    end
-
-    # Suggest the optimal loading strategy when it differs from plain .includes
-    def loading_strategy_hint
-      return nil unless actionable? && @loading_strategy
-
-      case @loading_strategy
-      when :eager_load
-        "Consider `.eager_load(:#{@association_name})` instead — your query filters on the association, so a JOIN is more efficient"
-      when :preload
-        "Consider `.preload(:#{@association_name})` — separate queries avoid JOIN overhead for simple loading"
+        "Cannot infer a safe association fix from this SQL; inspect the call site."
       end
     end
   end

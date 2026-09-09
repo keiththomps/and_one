@@ -2,6 +2,8 @@
 
 ### Fixed
 
+- Resolve unambiguous belongs-to/has-one/has-many association directions and custom keys without retaining stale model caches; abstain on ambiguous/complex associations (#11).
+- Qualify preload advice, separate COUNT/EXISTS/scalar guidance, and label heuristic fix locations across text, JSON, dashboard, and GitHub annotations (#12).
 - Load runtime dependencies explicitly for standalone ActiveRecord use and register Rails/RSpec integrations safely in either require order (#18).
 - Keep test matcher capture scan-local without mutating global reporting settings; count successful Minitest assertions and reject matchers inside active scans with a clear error (#13).
 - Enforce `raise_on_detect` for every violating scan, independently of first-occurrence reporting and aggregate history (#2).

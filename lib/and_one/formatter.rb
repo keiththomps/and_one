@@ -61,9 +61,9 @@ module AndOne
         lines << ""
       end
 
-      # Fix location — where to add .includes
+      # The stack supplies a heuristic investigation location, not relation provenance.
       if detection.fix_location && detection.fix_location != detection.origin_frame
-        lines << colorize("  Fix here (where to add .includes):", :cyan)
+        lines << colorize("  Possible fix location (heuristic; inspect the caller):", :cyan)
         lines << colorize("  ⇒ #{format_frame(detection.fix_location)}", :green)
         lines << ""
       end
@@ -78,7 +78,7 @@ module AndOne
 
       # Association suggestion
       suggestion = resolve_suggestion(detection, cleaned_bt)
-      if suggestion&.actionable?
+      if suggestion&.fix_hint
         lines << colorize("  💡 Suggestion:", :cyan, :bold)
         lines << colorize("    #{suggestion.fix_hint}", :green)
         lines << colorize("    #{suggestion.loading_strategy_hint}", :green) if suggestion.loading_strategy_hint

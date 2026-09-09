@@ -48,7 +48,7 @@ module AndOne
     end
 
     # The frame where the AR relation/collection was likely loaded or iterated.
-    # This is the best place to add .includes().
+    # Heuristic only: the stack does not identify where a relation was built.
     def fix_location
       @fix_location ||= find_fix_location
     end
