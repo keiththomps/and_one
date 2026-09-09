@@ -39,12 +39,18 @@ module AndOne
       end
     end
 
+    def annotation_hint(detection)
+      AssociationResolver.resolve(detection, detection.raw_caller_strings)&.fix_hint || "Inspect the call site."
+    rescue StandardError
+      "Inspect the call site."
+    end
+
     def report_annotations(detections)
       detections.each do |detection|
         file, line = parse_frame_location(detection.fix_location || detection.origin_frame)
         query_count = "#{detection.count} queries to `#{detection.table_name || "unknown"}`"
         if file
-          hint = "Add `.includes(:#{suggest_association_name(detection)})` to fix."
+          hint = "Possible fix location (heuristic). #{annotation_hint(detection)}"
           $stdout.puts "::warning file=#{file},line=#{line || 1}::N+1 detected: #{query_count}. #{hint}"
         else
           $stdout.puts "::warning ::N+1 detected: #{query_count}."

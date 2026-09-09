@@ -2,13 +2,13 @@
 
 Detect N+1 queries in Rails applications with zero configuration and actionable fix suggestions.
 
-AndOne stays completely invisible until it detects an N+1 query — then it tells you exactly what's wrong and how to fix it. No external dependencies beyond Rails itself.
+AndOne stays completely invisible until it detects an N+1 query — then it points to repeated queries and suggests what to investigate. No external dependencies beyond Rails itself.
 
 ## Features
 
 - **Zero configuration** — Railtie auto-setup in development and test
-- **Actionable fix suggestions** — suggests the exact `.includes()`, `.preload()`, or `.eager_load()` call
-- **Smart location detection** — identifies both the origin (where the N+1 fires) and the fix location (where to add `.includes`)
+- **Qualified fix suggestions** — suggests candidate `.includes()`/`.preload()` calls for basic association record loading, with separate guidance for counts and scalar queries
+- **Location hints** — shows the origin and a heuristic caller location to investigate (not the proven relation-construction site)
 - **Clean error handling** — never corrupts backtraces or interferes with exception propagation
 - **No external dependencies** — only Rails itself
 - **Auto-raises in test** — N+1s fail your test suite by default
@@ -23,8 +23,16 @@ AndOne stays completely invisible until it detects an N+1 query — then it tell
 - **Per-environment thresholds** — different `min_n_queries` for development vs test
 - **GitHub Actions annotations** — N+1s appear as warning annotations on PR diffs
 - **`strict_loading` suggestions** — also suggests model-level prevention as an alternative
-- **`has_many :through` and polymorphic support** — resolves complex association chains
+- **Conservative association resolution** — handles unambiguous `belongs_to`, `has_one`, and `has_many`; abstains on complex or ambiguous SQL
 - **Thread-safe under Puma** — per-thread isolation verified with concurrent stress tests
+
+## Recommendation limits
+
+SQL alone does not prove which Ruby association was called. Association advice uses currently loaded models and qualified equality/`IN` predicates in plain, single-table SELECTs. Both foreign keys and `belongs_to` target primary keys (including custom single-column keys) are considered. Multiple matching associations/models, through associations, polymorphic associations, joins, aliases, CTEs, composite keys, and other complex SQL may receive only non-actionable guidance. Models and reflections are not cached: late-loaded models and Rails-reloaded classes are considered on the next resolution without retaining stale misses/classes.
+
+For basic record loading, try the suggested `includes` or `preload` on the parent relation and verify equivalent scopes/results and fewer queries. Filters or AND/OR tokens do **not** establish that a JOIN is faster. COUNT receives counter-cache/grouped-count guidance: `includes` alone does not eliminate association `.count` queries; `.size` can reuse an already loaded association when loading all its records is acceptable. Existence and scalar lookups receive batching guidance rather than an invented association fix. `strict_loading` hints apply to lazy record loading, not count/existence queries.
+
+The possible fix location is a **heuristic** caller frame, not necessarily where the relation was constructed. Text, dashboard, and GitHub annotations label it accordingly; JSON retains `fix_location` and adds `fix_location_confidence: "heuristic"`. JSON suggestions include `operation`, `association_type`, and `confidence` (`candidate` or `guidance_only`); guidance-only entries may have a null association/loading strategy.
 
 ## Installation
 
@@ -81,7 +89,7 @@ When an N+1 is detected, you get output like:
   Origin (where the N+1 is triggered):
   → app/views/posts/index.html.erb:5
 
-  Fix here (where to add .includes):
+  Possible fix location (heuristic; inspect the caller):
   ⇒ app/controllers/posts_controller.rb:8
 
   Call stack:
@@ -89,7 +97,7 @@ When an N+1 is detected, you get output like:
     app/controllers/posts_controller.rb:8
 
   💡 Suggestion:
-    Add `.includes(:comments)` to your Post query
+    If this is Post#comments record loading, try `.includes(:comments)` or `.preload(:comments)` on the parent query; verify scopes and results.
 
   To ignore, add to .and_one_ignore:
     fingerprint:a1b2c3d4e5f6
@@ -345,7 +353,7 @@ For manual `AndOne.scan` / `AndOne.finish` pairs, the caller must invoke `finish
 2. **Group** queries by call stack fingerprint
 3. **Fingerprint** SQL to detect same-shape queries with different bind values
 4. **Resolve** table names back to ActiveRecord models and associations
-5. **Suggest** the exact `.includes()` call to fix the N+1
+5. **Suggest** a candidate preload for basic record loading or operation-specific investigation guidance
 6. **Filter** against the `.and_one_ignore` file and aggregate tracker
 
 The middleware is designed to **never interfere with error propagation**. If your app raises an exception during a request, AndOne silently stops scanning and re-raises the original exception with its backtrace completely intact.

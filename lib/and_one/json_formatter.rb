@@ -52,12 +52,16 @@ module AndOne
         sample_query: detection.sample_query,
         origin: format_frame(detection.origin_frame),
         fix_location: format_frame(detection.fix_location),
+        fix_location_confidence: detection.fix_location ? "heuristic" : nil,
         backtrace: clean_backtrace(detection.raw_caller_strings).first(10)
       }
 
-      if suggestion&.actionable?
+      if suggestion&.fix_hint
         entry[:suggestion] = {
-          association: suggestion.association_name.to_s,
+          association: suggestion.association_name&.to_s,
+          association_type: suggestion.association_type&.to_s,
+          operation: suggestion.operation.to_s,
+          confidence: suggestion.actionable? ? "candidate" : "guidance_only",
           parent_model: suggestion.parent_model&.name,
           fix: suggestion.fix_hint,
           loading_strategy: suggestion.loading_strategy&.to_s
