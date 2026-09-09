@@ -50,7 +50,7 @@ module AndOne
                  rescue StandardError
                    nil
                  end
-                 fix = suggestion&.actionable? ? h(suggestion.fix_hint) : "—"
+                 fix = suggestion&.fix_hint ? h(suggestion.fix_hint) : "—"
                  strict_hint = suggestion&.strict_loading_hint ? h(suggestion.strict_loading_hint) : ""
                  loading_hint = suggestion&.loading_strategy_hint ? h(suggestion.loading_strategy_hint) : ""
 
@@ -65,7 +65,7 @@ module AndOne
                      <td><code class="sql">#{h(truncate(det.sample_query, 200))}</code></td>
                      <td>
                        <div class="origin">#{h(origin)}</div>
-                       <div class="fix-loc">⇒ #{h(fix_loc)}</div>
+                       <div class="fix-loc">Possible fix location (heuristic): #{h(fix_loc)}</div>
                      </td>
                      <td>
                        <div class="suggestion">#{fix}</div>
@@ -123,7 +123,7 @@ module AndOne
                 <th>Count</th>
                 <th>Query</th>
                 <th>Location</th>
-                <th>Fix</th>
+                <th>Suggested investigation</th>
               </tr>
             </thead>
             <tbody>
