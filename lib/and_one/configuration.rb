@@ -4,7 +4,39 @@ module AndOne
   # Service settings can change between scans. Flush the old writer before
   # replacing it; a failed flush rejects the change rather than losing entries.
   module Configuration
-    attr_reader :aggregate_path, :logfile, :logfile_format, :ignore_file_path
+    attr_reader :aggregate_path, :logfile_format, :ignore_file_path, :aggregate_store, :storage_strict
+
+    %i[aggregate_store storage_strict].each do |setting|
+      define_method("#{setting}=") do |value|
+        @singleton_mutex.synchronize do
+          @aggregate = nil unless instance_variable_get("@#{setting}") == value
+          instance_variable_set("@#{setting}", value)
+        end
+      end
+    end
+
+    def logfile
+      @logfile == :session ? File.join(session.path, "findings.log") : @logfile
+    end
+
+    def session
+      environment = current_env || "development"
+      root = defined?(Rails) && Rails.respond_to?(:root) && Rails.root ? Rails.root.to_s : Dir.pwd
+      key = [root, environment, Session.default_id(environment)]
+      @session_mutex.synchronize do
+        @session = Session.new(root: File.join(root, "tmp/and_one/sessions"), environment: environment, id: key.last) if @session_key != key
+        @session_key = key
+        @session
+      end
+    end
+
+    # Call only while session writers are quiescent; running scans may repopulate it.
+    # Explicit custom paths are owned by the caller and reset as configured.
+    def reset_session!
+      logfile_writer&.flush!
+      aggregate.reset!
+      LogfileWriter.truncate!(logfile)
+    end
 
     def aggregate_path=(value)
       @singleton_mutex.synchronize do
@@ -35,7 +67,7 @@ module AndOne
     def apply_rails_defaults
       active = Rails.env.development? || Rails.env.test?
       defaults = { enabled: active, raise_on_detect: Rails.env.test?,
-                   logfile: active ? Rails.root.join("log/and_one.log").to_s : nil,
+                   logfile: active ? :session : nil,
                    dev_toast: Rails.env.development? }
       defaults.each do |key, value|
         public_send("#{key}=", value) unless instance_variable_defined?("@#{key}")

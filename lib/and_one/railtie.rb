@@ -8,17 +8,11 @@ module AndOne
 
     initializer "and_one.configure", after: :load_config_initializers do |app|
       if AndOne.enabled?
-        # Truncate stale findings from previous boot before workers fork
-        LogfileWriter.truncate!(AndOne.logfile)
-
         at_exit do
           AndOne.logfile_writer&.flush!
         rescue StandardError
           # Swallow errors during shutdown to avoid confusing output
         end
-
-        # Reset aggregate on server boot for a fresh session
-        AndOne.aggregate.reset!
 
         # Rack middleware for web requests
         app.middleware.insert_before(0, AndOne::Middleware)

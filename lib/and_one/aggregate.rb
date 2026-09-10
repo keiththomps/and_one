@@ -3,14 +3,15 @@
 require "json"
 require "fileutils"
 require "time"
+require_relative "aggregate_store"
 
 module AndOne
   # Tracks unique N+1 detections across requests/jobs in a server session.
   # Each unique N+1 (by issue identity) is only reported once.
   # Subsequent occurrences are silently counted.
   #
-  # Data is stored on disk (JSON) so detections are shared across all Puma
-  # workers in multi-process deployments. File locking ensures consistency.
+  # Memory storage is the default. An explicit path selects shared JSON storage.
+  # Both stores retain only a bounded least-recently-observed history.
   #
   # The aggregate can be queried at any time:
   #   AndOne.aggregate.summary    # => formatted string
@@ -20,61 +21,53 @@ module AndOne
   class Aggregate
     Entry = Struct.new(:detection, :occurrences, :first_seen_at, :last_seen_at)
 
-    def initialize(path: nil)
-      @dir = path || default_dir
-      @data_path = File.join(@dir, "aggregate.json")
-      @lock_path = File.join(@dir, "aggregate.lock")
-      @mutex = Mutex.new
-      FileUtils.mkdir_p(@dir)
+    MAX_ENTRIES = 100
+    MAX_SAMPLES = 5
+    MAX_SQL_BYTES = 2048
+    MAX_FRAMES = 20
+    MAX_FRAME_BYTES = 256
+
+    def initialize(path: nil, store: nil, strict: false)
+      @store = store || (path ? AggregateStore::FileStore.new(path) : AggregateStore::Memory.new)
+      @strict = strict
+      @warning_mutex = Mutex.new
     end
 
     # Record a detection. Returns true if this is a NEW unique detection
     # (first time seeing this issue identity), false if it's a repeat.
-    def record(detection)
-      fp = detection.issue_id
+    def record(detection) # rubocop:disable Naming/PredicateMethod -- public compatibility API
+      record_many([detection]).include?(detection)
+    end
 
-      with_lock do
-        data = read_data
-
-        if data.key?(fp)
-          data[fp]["occurrences"] += 1
-          data[fp]["last_seen_at"] = Time.now.iso8601
-          write_data(data)
-          false
-        else
-          data[fp] = {
-            "detection" => serialize_detection(detection),
-            "occurrences" => 1,
-            "first_seen_at" => Time.now.iso8601,
-            "last_seen_at" => Time.now.iso8601
-          }
-          write_data(data)
-          true
+    # One transaction per scan. On failure all findings remain reportable.
+    def record_many(detections)
+      safely(default: detections) do
+        @store.transaction do |data|
+          normalize_data!(data)
+          detections.select { |detection| record_new?(data, detection) }
         end
       end
     end
 
     def detections
-      with_lock do
-        data = read_data
-        data.each_with_object({}) do |(fp, entry_data), result|
-          result[fp] = deserialize_entry(entry_data)
+      safely(default: {}) do
+        @store.transaction do |data|
+          normalize_data!(data)
+          data.transform_values { |entry| deserialize_entry(entry) }
         end
       end
     end
 
     def size
-      with_lock { read_data.size }
+      detections.size
     end
 
     def empty?
-      with_lock { read_data.empty? }
+      detections.empty?
     end
 
     def reset!
-      with_lock do
-        FileUtils.rm_f(@data_path)
-      end
+      safely(default: nil) { @store.reset! }
     end
 
     def summary
@@ -103,43 +96,61 @@ module AndOne
 
     private
 
-    def with_lock
-      @mutex.synchronize do
-        File.open(@lock_path, File::RDWR | File::CREAT) do |lock|
-          lock.flock(File::LOCK_EX)
-          yield
+    def record_new?(data, detection)
+      key = detection.issue_id
+      existing = data.delete(key)
+      now = Time.now.iso8601
+      data[key] = if existing
+                    existing.merge("occurrences" => existing.fetch("occurrences") + 1, "last_seen_at" => now)
+                  else
+                    { "detection" => serialize_detection(detection), "occurrences" => 1,
+                      "first_seen_at" => now, "last_seen_at" => now }
+                  end
+      data.shift while data.size > MAX_ENTRIES
+      !existing
+    end
+
+    def normalize_data!(data)
+      normalized = data.values.last(MAX_ENTRIES).to_h do |entry|
+        detection = deserialize_entry(entry).detection
+        raise IOError, "Invalid occurrence count" unless entry["occurrences"].is_a?(Integer) && entry["occurrences"].positive?
+
+        bounded_entry = { "detection" => serialize_detection(detection), "occurrences" => entry["occurrences"],
+                          "first_seen_at" => parse_time(entry["first_seen_at"])&.iso8601,
+                          "last_seen_at" => parse_time(entry["last_seen_at"])&.iso8601 }
+        [detection.issue_id, bounded_entry]
+      end
+      data.replace(normalized)
+    end
+
+    def safely(default:)
+      yield
+    rescue StandardError => e
+      raise if @strict
+
+      @warning_mutex.synchronize do
+        now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        if !@last_warning || now - @last_warning >= 60
+          @last_warning = now
+          warn "AndOne aggregate storage failed (#{e.class}); findings were not persisted"
         end
       end
+      default
     end
 
-    def read_data
-      return {} unless File.exist?(@data_path)
-
-      JSON.parse(File.read(@data_path)).each_with_object({}) do |(_key, entry), data|
-        # Upgrade legacy shape-keyed entries using the one location they retained.
-        # Already-persisted issue IDs do not depend on the reader's application root.
-        entry["detection"] = serialize_detection(deserialize_entry(entry).detection) unless entry["detection"]["issue_id"]
-        data[entry["detection"]["issue_id"]] = entry
-      end
-    rescue JSON::ParserError
-      {}
-    end
-
-    def write_data(data)
-      tmp_path = "#{@data_path}.tmp"
-      File.write(tmp_path, JSON.generate(data))
-      File.rename(tmp_path, @data_path)
+    def bounded(value, bytes)
+      value.to_s.encode("UTF-8", invalid: :replace, undef: :replace).byteslice(0, bytes).scrub("")
     end
 
     def serialize_detection(det)
       {
-        "queries" => det.queries,
-        "caller_strings" => det.raw_caller_strings,
+        "queries" => det.queries.first(MAX_SAMPLES).map { |sql| bounded(sql, MAX_SQL_BYTES) },
+        "caller_strings" => det.raw_caller_strings.first(MAX_FRAMES).map { |frame| bounded(frame, MAX_FRAME_BYTES) },
         "count" => det.count,
-        "adapter" => det.adapter,
+        "adapter" => det.adapter && bounded(det.adapter, 128),
         "fingerprint" => det.fingerprint,
         "issue_id" => det.issue_id,
-        "connection_id" => det.connection_id
+        "connection_id" => det.connection_id && bounded(det.connection_id, 256)
       }
     end
 
@@ -151,7 +162,8 @@ module AndOne
         count: det_data["count"],
         adapter: det_data["adapter"],
         connection_id: det_data["connection_id"],
-        issue_id: det_data["issue_id"]
+        issue_id: det_data["issue_id"],
+        fingerprint: det_data["fingerprint"]
       )
       Entry.new(
         detection: det,
@@ -163,14 +175,6 @@ module AndOne
 
     def parse_time(str)
       str ? Time.parse(str) : nil
-    end
-
-    def default_dir
-      if defined?(Rails) && Rails.respond_to?(:root) && Rails.root
-        Rails.root.join("tmp", "and_one").to_s
-      else
-        File.join(Dir.pwd, "tmp", "and_one")
-      end
     end
   end
 end

@@ -9,10 +9,14 @@ module AndOne
   class LogfileWriter
     MAX_PENDING = 1000
 
-    # Clear stale findings from a previous boot.  Called once in the railtie
-    # before workers fork so every worker starts with a clean file.
+    # Explicit reset only. Booting another process must never truncate findings.
     def self.truncate!(path)
-      File.truncate(path, 0) if path && File.exist?(path)
+      return unless path && File.exist?(path)
+
+      File.open(path, File::RDWR) do |file|
+        file.flock(File::LOCK_EX)
+        file.truncate(0)
+      end
     end
 
     def initialize(path:, format: :text)
@@ -49,7 +53,7 @@ module AndOne
     private
 
     def append(output)
-      File.open(@path, File::RDWR | File::CREAT, 0o644) do |file|
+      File.open(@path, File::RDWR | File::CREAT, 0o600) do |file|
         file.flock(File::LOCK_EX)
         original_size = file.size
         begin
