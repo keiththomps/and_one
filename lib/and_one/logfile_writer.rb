@@ -44,7 +44,7 @@ module AndOne
         return if @entries.empty?
 
         output = "#{format_entries(@entries.values)}\n"
-        FileUtils.mkdir_p(File.dirname(@path))
+        FileUtils.mkdir_p(File.dirname(@path), mode: 0o700)
         append(output)
         @entries.clear
       end

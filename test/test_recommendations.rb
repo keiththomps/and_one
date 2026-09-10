@@ -103,7 +103,7 @@ class TestRecommendations < Minitest::Test
     assert_equal "guidance_only", json[:suggestion][:confidence]
 
     AndOne.aggregate.record(detection)
-    _, _, body = AndOne::DevUI.new(nil).call("PATH_INFO" => "/__and_one")
+    _, _, body = AndOne::DevUI.new(nil).call("PATH_INFO" => "/__and_one", "REMOTE_ADDR" => "127.0.0.1")
     assert_includes body.join, "Possible fix location (heuristic)"
     assert_includes body.join, "counter cache"
 

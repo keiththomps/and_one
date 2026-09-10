@@ -3,6 +3,8 @@
 require "digest"
 require "json"
 require_relative "query_cost"
+require_relative "capture_policy"
+require_relative "fingerprint"
 
 module AndOne
   # Represents a single N+1 detection: the repeated queries, their call site, and metadata.
@@ -14,14 +16,17 @@ module AndOne
     def initialize(queries:, count:, caller_locations: nil, raw_caller_strings: nil, adapter: nil, # rubocop:disable Metrics/ParameterLists
                    connection_id: nil, issue_id: nil, fingerprint: nil, query_cost: nil)
       @query_cost = query_cost
-      @queries = queries
-      @caller_locations = caller_locations
-      @raw_caller_strings_override = raw_caller_strings
+      # Compute the legacy broad ignore key before redaction/truncation.
+      @fingerprint = fingerprint || Digest::SHA256.hexdigest(
+        "#{Fingerprint.generate(queries.first, adapter: adapter)}:#{extract_table_name(queries.first)}"
+      )[0, 12]
+      @queries = queries.first(CapturePolicy::MAX_SAMPLES).map { |sql| CapturePolicy.sql(sql, adapter: adapter) }.freeze
+      @raw_caller_strings_override = CapturePolicy.frames(raw_caller_strings || caller_locations&.map(&:to_s) || []).freeze
+      @caller_locations = @raw_caller_strings_override.map { |frame| CapturePolicy::Location.new(frame).freeze }.freeze if caller_locations
       @count = count
       @adapter = adapter
       @connection_id = connection_id
       @issue_id = issue_id
-      @fingerprint = fingerprint
     end
 
     # Returns the SQL of the first query as the representative example
@@ -64,7 +69,7 @@ module AndOne
       [path, line].compact.join(":")
     end
 
-    # The raw caller strings (before backtrace cleaning)
+    # Capture-policy-limited caller strings (before optional backtrace cleaning)
     def raw_caller_strings
       @raw_caller_strings ||= @raw_caller_strings_override || caller_locations&.map(&:to_s) || []
     end
@@ -117,15 +122,7 @@ module AndOne
     end
 
     def app_frame?(frame)
-      # Not a gem
-      !frame.include?("/gems/") &&
-        # Not ruby stdlib / core
-        !frame.include?("/ruby/") &&
-        # Not and_one's own lib code
-        !frame.include?("lib/and_one/") &&
-        # Not <internal: or (eval) type frames
-        !frame.start_with?("<internal:") &&
-        !frame.include?("(eval)")
+      CapturePolicy.application_frame?(frame)
     end
   end
 end

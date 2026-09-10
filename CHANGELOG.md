@@ -6,6 +6,7 @@
 
 ### Fixed
 
+- Redact and bound SQL/backtrace samples before retention across all output sinks, preserve pre-redaction ignore matching, and restrict the dashboard to loopback by default with a configurable access guard. Add explicit risk-documented raw capture (#10).
 - Exclude mysql2 0.5.7 from the compatibility test stack due to its upstream empty-prepared-result crash; retain prepared-query coverage and document the application dependency workaround.
 - Preserve shared aggregate/log findings across boots, isolate environment/test sessions, and provide explicit reset and bounded stale-session cleanup (#8).
 - Default to bounded in-memory aggregates, opt into shared file storage, batch each scan into one transaction, and diagnose persistence failures without disrupting application work or N+1 enforcement (#9).

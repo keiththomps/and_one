@@ -5,6 +5,17 @@ module AndOne
   # replacing it; a failed flush rejects the change rather than losing entries.
   module Configuration
     attr_reader :aggregate_path, :logfile_format, :ignore_file_path, :aggregate_store, :storage_strict
+    attr_accessor :dashboard_access_guard
+
+    def capture_mode
+      @capture_mode || :redacted
+    end
+
+    def capture_mode=(value)
+      raise ArgumentError, "capture_mode must be :redacted or :raw" unless %i[redacted raw].include?(value)
+
+      @capture_mode = value
+    end
 
     %i[aggregate_store storage_strict].each do |setting|
       define_method("#{setting}=") do |value|

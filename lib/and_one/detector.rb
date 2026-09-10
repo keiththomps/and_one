@@ -12,7 +12,7 @@ module AndOne
       %r{active_record/validations/uniqueness}
     ].freeze
     SAMPLE_LIMIT = 5
-    Group = Struct.new(:total, :queries, :callers, :metadata, :ignored, :query_cost)
+    Group = Struct.new(:total, :queries, :callers, :metadata, :ignored, :query_cost, :fingerprint)
 
     attr_reader :detections
 
@@ -52,6 +52,7 @@ module AndOne
         Detection.new(
           queries: group.queries,
           caller_locations: group.callers,
+          fingerprint: group.fingerprint,
           count: group.total,
           adapter: group.metadata[:connection_adapter],
           connection_id: group.metadata[:connection_id],
@@ -63,23 +64,27 @@ module AndOne
     def record_query(sql, metadata, duration_ms)
       locations = caller_locations
       key = [location_fingerprint(locations), metadata[:connection_id],
-             Fingerprint.generate(sql, adapter: metadata[:connection_adapter])]
-      group = @groups[key] ||= new_group(locations, metadata)
+             Digest::SHA256.hexdigest(Fingerprint.generate(sql, adapter: metadata[:connection_adapter]))]
+      group = @groups[key] ||= new_group(locations, metadata, sql)
       group.total += 1
       group.query_cost.record(duration_ms)
       # Query ignore rules historically inspect ALL occurrences. Evaluate before
       # dropping samples so a late literal match still suppresses the whole group.
       group.ignored ||= @ignore_list&.query_ignored?(sql)
-      group.queries << sql if group.queries.size < SAMPLE_LIMIT
+      group.queries << CapturePolicy.sql(sql, adapter: metadata[:connection_adapter]) if group.queries.size < SAMPLE_LIMIT
     end
 
-    def new_group(locations, metadata)
-      ignored = locations.any? { |frame| @allow_stack_paths.any? { |pattern| frame.to_s.match?(pattern) } }
-      Group.new(total: 0, queries: [], callers: locations, metadata: metadata, ignored: ignored, query_cost: QueryCost.new)
+    def new_group(locations, metadata, sql)
+      patterns = @allow_stack_paths + (AndOne.ignore_callers || [])
+      ignored = locations.any? { |frame| patterns.any? { |pattern| frame.to_s.match?(pattern) } }
+      ignored ||= @ignore_list&.callers_ignored?(locations.map(&:to_s))
+      sample = Detection.new(queries: [sql], count: 1, adapter: metadata[:connection_adapter])
+      Group.new(total: 0, queries: [], callers: CapturePolicy.frames(locations), metadata: metadata,
+                ignored: ignored, query_cost: QueryCost.new, fingerprint: sample.fingerprint)
     end
 
     def location_fingerprint(locations)
-      locations.map { |loc| [loc.path, loc.lineno] }
+      Digest::SHA256.hexdigest(locations.map { |loc| [loc.path, loc.lineno] }.to_json)
     end
   end
 end

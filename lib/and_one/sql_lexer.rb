@@ -15,6 +15,7 @@ module AndOne
       @mysql = adapter.to_s.match?(/mysql|trilogy/i)
       @sqlite = adapter.to_s.match?(/sqlite/i)
       @postgres = adapter.to_s.match?(/postgres/i)
+      @ambiguous_quotes = @sqlite || adapter.nil? || adapter.to_s == "unknown"
     end
 
     def tokens
@@ -28,7 +29,38 @@ module AndOne
       result
     end
 
+    # Preserve SQL layout for display, but never emit literals, comments or
+    # unsupported/unterminated tokens. Fingerprinting intentionally differs.
+    def redacted
+      @redacting = true
+      output = +""
+      previous = nil
+      until @scanner.eos?
+        whitespace = @scanner.scan(/\s+/)
+        if whitespace
+          output << whitespace
+          next
+        end
+        start = @scanner.pos
+        token = next_token
+        output << if token.nil? || %i[parameter opaque].include?(token.kind) || ambiguous_identifier?(token, previous)
+                    "?"
+                  else
+                    @scanner.string.byteslice(start...@scanner.pos)
+                  end
+        previous = token if token
+      end
+      output
+    end
+
     private
+
+    def ambiguous_identifier?(token, previous)
+      return false unless @ambiguous_quotes && token.kind == :identifier && token.text.start_with?('"')
+      return false if @scanner.check(/\s*\./) || previous&.text == "."
+
+      !%w[from join as].include?(previous&.text)
+    end
 
     def next_token
       return block_comment if @scanner.peek(2) == "/*"
@@ -77,6 +109,9 @@ module AndOne
       prefix = @scanner.scan(/[eEnNbBxX](?=')/)
       escaped = @mysql || prefix&.casecmp?("e")
       closed = consume_quoted?("'", escaped: escaped)
+      # Session-dependent backslash rules can make the closing quote ambiguous.
+      # Mask the remainder rather than accidentally emitting part of a literal.
+      @scanner.terminate if @redacting && @scanner.string.byteslice(start...@scanner.pos).include?("\\")
       closed ? Token.new(:parameter, "?") : raw_token(start, :opaque)
     end
 
@@ -96,6 +131,10 @@ module AndOne
       opening = @scanner.peek(1)
       closing = opening == "[" ? "]" : opening
       closed = consume_quoted?(closing, escaped: @mysql)
+      if @redacting && @scanner.string.byteslice(start...@scanner.pos).include?("\\")
+        @scanner.terminate
+        return Token.new(:parameter, "?")
+      end
       if closed && @mysql && opening == '"'
         Token.new(:parameter, "?")
       else
