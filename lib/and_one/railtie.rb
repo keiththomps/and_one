@@ -2,14 +2,12 @@
 
 module AndOne
   class Railtie < Rails::Railtie
-    initializer "and_one.configure" do |app|
-      # Only activate in development and test by default
-      if Rails.env.development? || Rails.env.test?
-        AndOne.enabled = true
+    initializer "and_one.defaults", before: :load_config_initializers do
+      AndOne.apply_rails_defaults
+    end
 
-        # Default logfile for collecting all findings
-        AndOne.logfile = "log/and_one.log" if AndOne.logfile.nil?
-
+    initializer "and_one.configure", after: :load_config_initializers do |app|
+      if AndOne.enabled?
         # Truncate stale findings from previous boot before workers fork
         LogfileWriter.truncate!(AndOne.logfile)
 
@@ -22,18 +20,12 @@ module AndOne
         # Reset aggregate on server boot for a fresh session
         AndOne.aggregate.reset!
 
-        # In test, raise by default so N+1s fail the test suite
-        AndOne.raise_on_detect = true if Rails.env.test?
-
         # Rack middleware for web requests
         app.middleware.insert_before(0, AndOne::Middleware)
 
         if Rails.env.development?
           # Dev UI dashboard for N+1 overview
           app.middleware.use(AndOne::DevUI)
-
-          # Dev toast: show in-page N+1 notifications (default on in development)
-          AndOne.dev_toast = true if AndOne.dev_toast.nil?
         end
 
         # ActiveJob hook — covers all job backends (Sidekiq, GoodJob, SolidQueue, etc.)
@@ -49,8 +41,6 @@ module AndOne
             end
           end
         end
-      else
-        AndOne.enabled = false
       end
     end
 

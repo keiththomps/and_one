@@ -4,12 +4,11 @@ require "json"
 require "fileutils"
 
 module AndOne
-  # Buffers N+1 detections in memory (deduplicated by issue identity) and writes
-  # them to a log file on process exit.  Handles parallel workers (forked test
-  # processes, Puma cluster, etc.) by using file-level locking so all workers
-  # safely append.  Truncation of stale data is handled at boot in the railtie,
-  # before workers fork.
+  # A bounded retry buffer. Reporting flushes after each scan; file locking
+  # keeps cooperating processes' appends intact.
   class LogfileWriter
+    MAX_PENDING = 1000
+
     # Clear stale findings from a previous boot.  Called once in the railtie
     # before workers fork so every worker starts with a clean file.
     def self.truncate!(path)
@@ -26,34 +25,51 @@ module AndOne
     # Accept an array of Detection objects; deduplicate by issue identity.
     def record(detections)
       @mutex.synchronize do
-        detections.each do |d|
-          @entries[d.issue_id] ||= d
+        additions = detections.to_h { |d| [d.issue_id, d] }
+        if (@entries.keys | additions.keys).size > MAX_PENDING
+          raise IOError, "AndOne logfile retry buffer full (#{MAX_PENDING} findings); flush before retrying"
         end
+
+        @entries.merge!(additions) { |_key, existing, _new| existing }
       end
     end
 
     # Format all buffered entries and write to the log file with locking.
     def flush!
-      entries = @mutex.synchronize do
-        snapshot = @entries.values
-        @entries = {}
-        snapshot
-      end
-      return if entries.empty?
+      @mutex.synchronize do
+        return if @entries.empty?
 
-      output = format_entries(entries)
-      FileUtils.mkdir_p(File.dirname(@path))
-
-      File.open(@path, File::RDWR | File::CREAT, 0o644) do |f|
-        f.flock(File::LOCK_EX)
-        f.seek(0, IO::SEEK_END)
-        f.write("\n") if f.size.positive?
-        f.write(output)
-        f.flock(File::LOCK_UN)
+        output = "#{format_entries(@entries.values)}\n"
+        FileUtils.mkdir_p(File.dirname(@path))
+        append(output)
+        @entries.clear
       end
     end
 
     private
+
+    def append(output)
+      File.open(@path, File::RDWR | File::CREAT, 0o644) do |file|
+        file.flock(File::LOCK_EX)
+        original_size = file.size
+        begin
+          if original_size.positive?
+            file.seek(-1, IO::SEEK_END)
+            output = "\n#{output}" unless file.read(1) == "\n"
+          end
+          file.seek(0, IO::SEEK_END)
+          written = file.write(output)
+          raise IOError, "Incomplete AndOne logfile write" unless written == output.bytesize
+
+          file.flush
+        rescue StandardError
+          file.truncate(original_size)
+          raise
+        ensure
+          file.flock(File::LOCK_UN)
+        end
+      end
+    end
 
     def format_entries(entries)
       case @format
