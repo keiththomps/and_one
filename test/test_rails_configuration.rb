@@ -56,10 +56,11 @@ class TestRailsConfiguration < Minitest::Test
       AndOne.raise_on_detect = false
     RUBY
       abort "default storage touched" if File.exist?("tmp/and_one")
-      abort "custom storage unused" unless File.directory?("custom_aggregate")
+      abort "premature storage" if File.exist?("custom_aggregate")
       abort "raise overwritten" if AndOne.raise_on_detect
       detection = AndOne::Detection.new(queries: ["SELECT * FROM posts"], count: 2)
       AndOne.send(:report, [detection])
+      abort "custom storage unused" unless File.directory?("custom_aggregate")
       entry = JSON.parse(File.read("custom_logs/findings.jsonl"))
       abort "wrong format" unless entry["event"] == "n_plus_one_detected"
       abort "default logfile touched" if File.exist?("log/and_one.log")

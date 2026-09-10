@@ -2,6 +2,9 @@
 
 ### Fixed
 
+- Preserve shared aggregate/log findings across boots, isolate environment/test sessions, and provide explicit reset and bounded stale-session cleanup (#8).
+- Default to bounded in-memory aggregates, opt into shared file storage, batch each scan into one transaction, and diagnose persistence failures without disrupting application work or N+1 enforcement (#9).
+
 - Honor Rails application initializer paths, formats, and explicit disable settings before service I/O; rebuild cached services when their configuration changes between scans (#7).
 - Flush logfile findings before exit, retain a bounded retry buffer on failures, and keep callbacks outside output locks without suppressing N+1 enforcement (#17).
 - Recognize case-insensitive reads and read CTEs conservatively, preserve ordered stack frames, and attribute/isolate SQL using the emitting connection (#5).

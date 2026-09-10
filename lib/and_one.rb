@@ -11,6 +11,7 @@ require_relative "and_one/test_capture"
 require_relative "and_one/query_capture"
 require_relative "and_one/reporting"
 require_relative "and_one/configuration"
+require_relative "and_one/session"
 
 module AndOne
   class NPlus1Error < StandardError; end
@@ -24,6 +25,7 @@ module AndOne
   # across Puma threads.
   @singleton_mutex = Mutex.new
   @report_mutex = Mutex.new
+  @session_mutex = Mutex.new
 
   class << self
     attr_accessor :enabled, :raise_on_detect, :backtrace_cleaner,
@@ -90,7 +92,10 @@ module AndOne
 
     def aggregate
       @singleton_mutex.synchronize do
-        @aggregate ||= Aggregate.new(path: aggregate_path)
+        @aggregate ||= begin
+          store = AggregateStore::FileStore.new(aggregate_path || session) if aggregate_path || aggregate_store == :file
+          Aggregate.new(store: store, strict: storage_strict)
+        end
       end
     end
 
@@ -98,6 +103,7 @@ module AndOne
       return nil unless logfile
 
       @singleton_mutex.synchronize do
+        session.activate! if @logfile == :session
         @logfile_writer ||= LogfileWriter.new(
           path: logfile,
           format: logfile_format || :text

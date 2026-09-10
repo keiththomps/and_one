@@ -6,7 +6,7 @@ module AndOne
     private
 
     def report(detections)
-      new_detections = detections.select { |detection| aggregate.record(detection) }
+      new_detections = aggregate.record_many(detections)
       safely_deliver do
         writer = logfile_writer
         writer&.record(new_detections)

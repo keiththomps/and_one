@@ -10,7 +10,7 @@ module AndOne
     attr_reader :queries, :caller_locations, :count, :adapter, :connection_id
 
     def initialize(queries:, count:, caller_locations: nil, raw_caller_strings: nil, adapter: nil,
-                   connection_id: nil, issue_id: nil)
+                   connection_id: nil, issue_id: nil, fingerprint: nil)
       @queries = queries
       @caller_locations = caller_locations
       @raw_caller_strings_override = raw_caller_strings
@@ -18,6 +18,7 @@ module AndOne
       @adapter = adapter
       @connection_id = connection_id
       @issue_id = issue_id
+      @fingerprint = fingerprint
     end
 
     # Returns the SQL of the first query as the representative example

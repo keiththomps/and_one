@@ -9,6 +9,8 @@ class TestConfiguration < Minitest::Test
     previous = AndOne.aggregate
     AndOne.aggregate_path = File.join(@aggregate_tmpdir, "other")
     refute_same previous, AndOne.aggregate
+    refute File.exist?(AndOne.aggregate_path), "storage is lazy"
+    AndOne.aggregate.record(AndOne::Detection.new(queries: ["SELECT * FROM posts"], count: 2))
     assert File.directory?(AndOne.aggregate_path)
   end
 

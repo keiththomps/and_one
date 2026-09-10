@@ -14,7 +14,7 @@ AndOne stays completely invisible until it detects an N+1 query — then it poin
 - **Auto-raises in test** — N+1s fail your test suite by default
 - **Background job support** — ActiveJob (`around_perform`) and Sidekiq server middleware, with double-scan protection
 - **Ignore file** — `.and_one_ignore` with `gem:`, `path:`, `query:`, and `fingerprint:` rules
-- **Automatic deduplication** — each unique N+1 is reported once per server session with occurrence counts, shared across all Puma workers via disk-based storage
+- **Bounded deduplication** — occurrence counts with in-memory storage by default and opt-in shared, session-scoped file storage
 - **Test matchers** — Minitest (`assert_no_n_plus_one`) and RSpec (`expect { }.not_to cause_n_plus_one`)
 - **Dev toast notifications** — in-page toast on every page that triggers an N+1, with a link to the dashboard
 - **Dev UI dashboard** — browse `/__and_one` in development for a live N+1 overview
@@ -71,7 +71,7 @@ end
 puts "Detected #{detections.size} repeated-query patterns"
 ```
 
-Standalone scans are enabled by default and do not raise unless configured. They do not install request/job hooks or Rails environment defaults until a Rails application boots. Normal scans persist findings under `tmp/and_one` by default; set `aggregate_path` before the first scan to change it. `require "and_one"` is safe before or after loading Rails.
+Standalone scans are enabled by default and do not raise unless configured. They do not install request/job hooks or Rails environment defaults until a Rails application boots. Normal scans keep bounded findings in memory by default; set `aggregate_store = :file` before the first scan for process sharing. `require "and_one"` is safe before or after loading Rails.
 
 ## Capture coverage and limits
 
@@ -177,7 +177,7 @@ This is especially useful for **N+1s coming from gems** where you can't add `.in
 
 ## Deduplication
 
-In development, the same N+1 can fire on every request, flooding your logs. AndOne automatically deduplicates — each unique issue (query shape + application origin + connection context) is reported only once per server session. Subsequent occurrences at that location are silently counted; the same SQL shape at a different location remains visible as a separate issue.
+In development, the same N+1 can fire on every request, flooding your logs. AndOne automatically deduplicates — each unique issue (query shape + application origin + connection context) is reported only once while retained in the aggregate (per process by default, or across cooperating processes with file storage). Subsequent occurrences at that location are silently counted; the same SQL shape at a different location remains visible as a separate issue.
 
 Deduplication applies to logs, GitHub annotations, logfile output, and `notifications_callback` (which receives only newly observed findings). Scan results still contain every non-ignored finding in that scan. When `raise_on_detect` is enabled, **every violating scan raises**, even if the pattern was already reported by another scan. Test matchers do not report or consume first-occurrence deduplication.
 
@@ -326,8 +326,15 @@ AndOne.configure do |config|
   # Options: :top_right, :top_left, :bottom_right, :bottom_left
   config.dev_toast_position = :top_right
 
-  # Aggregate storage path (default: Rails.root/tmp/and_one)
-  config.aggregate_path = Rails.root.join("tmp", "and_one").to_s
+  # Opt in to process sharing (default: bounded in-memory storage)
+  config.aggregate_store = :file
+
+  # Optional exact custom directory; also opts into file storage.
+  # Custom paths bypass automatic environment/session isolation.
+  # config.aggregate_path = Rails.root.join("tmp", "my_findings").to_s
+
+  # Raise storage errors instead of diagnosing them (default: false)
+  config.storage_strict = false
 
   # Path to ignore file (default: Rails.root/.and_one_ignore)
   config.ignore_file_path = Rails.root.join(".and_one_ignore").to_s
@@ -347,8 +354,9 @@ AndOne.configure do |config|
   # Custom backtrace cleaner
   config.backtrace_cleaner = Rails.backtrace_cleaner
 
-  # Log all unique findings to a file (default: "log/and_one.log", nil to disable)
-  config.logfile = "log/and_one.log"
+  # Rails dev/test default: findings.log in the environment/session directory.
+  # A custom path bypasses session isolation; nil disables file output.
+  config.logfile = :session
 
   # Logfile format: :text or :json (default: :text)
   config.logfile_format = :text
@@ -364,9 +372,9 @@ end
 
 ### Configuration lifecycle
 
-Rails defaults are applied before `config/initializers`, without overwriting explicitly assigned settings (including `logfile = nil` or `false`). Service setup and middleware registration happen after those initializers. Development/test enable scanning and a logfile at `Rails.root/log/and_one.log`; only test raises by default. Production is disabled by default, but can be explicitly enabled.
+Rails defaults are applied before `config/initializers`, without overwriting explicitly assigned settings (including `logfile = nil` or `false`). Service setup and middleware registration happen after those initializers. Development/test enable scanning and a session-scoped logfile under `Rails.root/tmp/and_one/sessions`; only test raises by default. Production is disabled by default, but can be explicitly enabled.
 
-Configure before scanning. Between scans, changing `aggregate_path` or `ignore_file_path` rebuilds the corresponding cached service on next access. Changing `logfile` or `logfile_format` first flushes the old writer, then replaces it; a flush failure raises and rejects that configuration change. Do not reconfigure while requests/jobs are running. Other settings are read by subsequent scans/reports. Boot still resets the configured aggregate and truncates the configured logfile; shared-session lifecycle improvements are tracked separately in #8.
+Configure before scanning. Between scans, changing `aggregate_path`, `aggregate_store`, `storage_strict`, or `ignore_file_path` rebuilds the corresponding cached service on next access. Changing `logfile` or `logfile_format` first flushes the old writer, then replaces it; a flush failure raises and rejects that configuration change. Do not reconfigure while requests/jobs are running. Other settings are read by subsequent scans/reports. Boot never resets the aggregate or truncates the logfile. See [storage and session lifecycle](docs/storage.md) for defaults, explicit resets, bounded cleanup, limits, and migration.
 
 ### Logfile delivery and failures
 
@@ -374,7 +382,7 @@ New, ignore-filtered findings are flushed synchronously after each reporting sca
 
 Format/open/write failures retain pending entries. Cooperating processes use file locks; failed partial appends are rolled back when the filesystem permits. The retry buffer holds at most 1,000 unique findings; overflow rejects the new batch with a rate-limited diagnostic during reporting, preserving previously accepted entries. Newly rejected findings are not automatically redelivered because aggregate deduplication has already occurred. This is best-effort delivery, not crash durability or exactly-once delivery; shutdown, rollback failure, or buffer exhaustion can lose findings.
 
-Callbacks run outside output locks and may reenter scanning. Callback and output `StandardError`s are diagnosed on stderr at most once per minute and do not fail application work or suppress configured `NPlus1Error` enforcement. `NPlus1Error` itself is always propagated, including from a nested callback scan. Callbacks are not retried. Explicit writer `record`/`flush!` calls still raise on failure. Aggregate persistence failures are a separate policy (tracked in #9).
+Callbacks run outside output locks and may reenter scanning. Callback and output `StandardError`s are diagnosed on stderr at most once per minute and do not fail application work or suppress configured `NPlus1Error` enforcement. `NPlus1Error` itself is always propagated, including from a nested callback scan. Callbacks are not retried. Explicit writer `record`/`flush!` calls still raise on failure. Aggregate persistence failures also default to non-disruptive, rate-limited diagnostics; `storage_strict = true` opts into propagation. See [storage policy](docs/storage.md).
 
 ## Manual Scanning
 
