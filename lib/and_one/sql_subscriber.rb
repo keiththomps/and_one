@@ -10,6 +10,7 @@ module AndOne
         return @subscriber if @subscriber
 
         @subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
+          ExecutionContext[:and_one_query_captures]&.each { |capture| capture.record(payload) }
           detector = ExecutionContext.active_detector
           detector&.record(payload)
         end
