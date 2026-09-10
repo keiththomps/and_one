@@ -9,10 +9,12 @@ require_relative "and_one/execution_context"
 require_relative "and_one/sql_subscriber"
 require_relative "and_one/test_capture"
 require_relative "and_one/reporting"
+require_relative "and_one/configuration"
 
 module AndOne
   class NPlus1Error < StandardError; end
 
+  extend Configuration
   extend Reporting
   extend TestCapture
 
@@ -26,9 +28,8 @@ module AndOne
     attr_accessor :enabled, :raise_on_detect, :backtrace_cleaner,
                   :allow_stack_paths, :ignore_queries, :ignore_callers,
                   :min_n_queries, :notifications_callback,
-                  :ignore_file_path, :json_logging, :env_thresholds,
-                  :dev_toast, :dev_toast_position, :aggregate_path,
-                  :logfile, :logfile_format
+                  :json_logging, :env_thresholds,
+                  :dev_toast, :dev_toast_position
 
     def configure
       yield self

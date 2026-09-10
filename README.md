@@ -269,7 +269,7 @@ Starting a matcher inside an already active scan raises `ArgumentError` **before
 
 - **Development**: Logs N+1 warnings to Rails logger and stderr
 - **Test**: Raises `AndOne::NPlus1Error` so N+1s fail your test suite
-- **Production**: Completely disabled (not even loaded)
+- **Production**: Disabled by default if loaded; the recommended Gemfile group excludes it
 
 ## Configuration
 
@@ -326,6 +326,20 @@ AndOne.configure do |config|
   }
 end
 ```
+
+### Configuration lifecycle
+
+Rails defaults are applied before `config/initializers`, without overwriting explicitly assigned settings (including `logfile = nil` or `false`). Service setup and middleware registration happen after those initializers. Development/test enable scanning and a logfile at `Rails.root/log/and_one.log`; only test raises by default. Production is disabled by default, but can be explicitly enabled.
+
+Configure before scanning. Between scans, changing `aggregate_path` or `ignore_file_path` rebuilds the corresponding cached service on next access. Changing `logfile` or `logfile_format` first flushes the old writer, then replaces it; a flush failure raises and rejects that configuration change. Do not reconfigure while requests/jobs are running. Other settings are read by subsequent scans/reports. Boot still resets the configured aggregate and truncates the configured logfile; shared-session lifecycle improvements are tracked separately in #8.
+
+### Logfile delivery and failures
+
+New, ignore-filtered findings are flushed synchronously after each reporting scan, so they are visible before process exit. First-occurrence deduplication still applies: later occurrences update the aggregate, not the logfile. Buffered failures are retried on the next scan containing findings (even already-known findings), or explicitly with `AndOne.logfile_writer&.flush!`. Rails also attempts a final flush at exit. No timer threads are created.
+
+Format/open/write failures retain pending entries. Cooperating processes use file locks; failed partial appends are rolled back when the filesystem permits. The retry buffer holds at most 1,000 unique findings; overflow rejects the new batch with a rate-limited diagnostic during reporting, preserving previously accepted entries. Newly rejected findings are not automatically redelivered because aggregate deduplication has already occurred. This is best-effort delivery, not crash durability or exactly-once delivery; shutdown, rollback failure, or buffer exhaustion can lose findings.
+
+Callbacks run outside output locks and may reenter scanning. Callback and output `StandardError`s are diagnosed on stderr at most once per minute and do not fail application work or suppress configured `NPlus1Error` enforcement. `NPlus1Error` itself is always propagated, including from a nested callback scan. Callbacks are not retried. Explicit writer `record`/`flush!` calls still raise on failure. Aggregate persistence failures are a separate policy (tracked in #9).
 
 ## Manual Scanning
 

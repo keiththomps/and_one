@@ -2,6 +2,8 @@
 
 ### Fixed
 
+- Honor Rails application initializer paths, formats, and explicit disable settings before service I/O; rebuild cached services when their configuration changes between scans (#7).
+- Flush logfile findings before exit, retain a bounded retry buffer on failures, and keep callbacks outside output locks without suppressing N+1 enforcement (#17).
 - Recognize case-insensitive reads and read CTEs conservatively, preserve ordered stack frames, and attribute/isolate SQL using the emitting connection (#5).
 - Keep the same SQL shape visible at distinct application locations and connection contexts across aggregate, dashboard, and logfile output (#6).
 - Resolve unambiguous belongs-to/has-one/has-many association directions and custom keys without retaining stale model caches; abstain on ambiguous/complex associations (#11).

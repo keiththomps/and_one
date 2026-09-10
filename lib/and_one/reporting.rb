@@ -7,7 +7,12 @@ module AndOne
 
     def report(detections)
       new_detections = detections.select { |detection| aggregate.record(detection) }
-      report_new(new_detections) unless new_detections.empty?
+      safely_deliver do
+        writer = logfile_writer
+        writer&.record(new_detections)
+        writer&.flush!
+      end
+      safely_deliver { report_new(new_detections) } unless new_detections.empty?
       return unless raise_on_detect
 
       formatter = Formatter.new(backtrace_cleaner: backtrace_cleaner || default_backtrace_cleaner)
@@ -15,11 +20,12 @@ module AndOne
     end
 
     def report_new(detections)
-      logfile_writer&.record(detections)
       cleaner = backtrace_cleaner || default_backtrace_cleaner
       message = Formatter.new(backtrace_cleaner: cleaner).format(detections)
 
-      # Keep the existing first-occurrence callback and output contracts.
+      # User code must never run under the non-reentrant output mutex.
+      safely_deliver { notifications_callback&.call(detections, message) }
+
       @report_mutex.synchronize do
         if json_logging
           json_output = JsonFormatter.new(backtrace_cleaner: cleaner).format(detections)
@@ -30,12 +36,27 @@ module AndOne
           end
         end
 
-        notifications_callback&.call(detections, message)
         report_annotations(detections) if ENV["GITHUB_ACTIONS"]
         return if raise_on_detect || json_logging
 
         Rails.logger.warn("\n#{message}") if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
         warn("\n#{message}") if $stderr.tty?
+      end
+    end
+
+    # Sink failures are best-effort and must not suppress N+1 enforcement.
+    # Emit at most one diagnostic per minute, without invoking application code.
+    def safely_deliver
+      yield
+    rescue NPlus1Error
+      raise
+    rescue StandardError => e
+      @report_mutex.synchronize do
+        now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        if !@last_delivery_warning || now - @last_delivery_warning >= 60
+          @last_delivery_warning = now
+          warn "AndOne reporting failed (#{e.class}); logfile entries retained within retry-buffer limits"
+        end
       end
     end
 
