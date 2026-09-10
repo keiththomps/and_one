@@ -263,9 +263,38 @@ RSpec.describe "Posts" do
 end
 ```
 
-Matchers capture a non-reporting scan: they never change global configuration, invoke callbacks, write findings, or raise `NPlus1Error`. Other concurrent scans retain their configured reporting and enforcement. Ignores and `enabled = false` still apply (disabled matchers execute the block but see no detections).
+N+1 matchers capture a non-reporting scan: they never change global configuration, invoke callbacks, write findings, or raise `NPlus1Error`. Other concurrent scans retain their configured reporting and enforcement. Ignores and `enabled = false` still apply (disabled matchers execute the block but see no detections).
 
-Starting a matcher inside an already active scan raises `ArgumentError` **before executing its block**. Put the matcher around the request/job or scan instead; ordinary nested request/job scans still pass through to the matcher's scope. Both successful Minitest helpers count one assertion.
+Starting an N+1 matcher inside an already active scan raises `ArgumentError` **before executing its block**. Put the matcher around the request/job or scan instead; ordinary nested request/job scans still pass through to the matcher's scope. Both successful Minitest helpers count one assertion.
+
+### Physical query budgets and input growth
+
+These explicit measurements count database work independently of repeated-shape detection:
+
+```ruby
+# Create fixtures and warm schema/connection caches BEFORE these scopes.
+# Workloads must build fresh relations/records, not reuse loaded associations.
+small = -> { Post.limit(2).preload(:comments).each { |p| p.comments.to_a } }
+large = -> { Post.limit(20).preload(:comments).each { |p| p.comments.to_a } }
+
+# Minitest (include AndOne::MinitestHelper)
+result = assert_query_budget(max: 2, &large)
+result.count         # executed query count
+result.cached_count  # cache hits, excluded from the budget
+result.locations     # up to five query call sites, no SQL/bind values
+result = assert_query_growth(small: small, large: large, max_growth: 0)
+result.growth        # large.count - small.count
+
+# RSpec (require "and_one/rspec")
+expect(&large).to stay_within_query_budget(2)
+expect(small: small, large: large).to stay_within_query_growth(0)
+```
+
+Limits are non-negative integers and inclusive. Growth measures the **absolute increase** in query count, not a ratio or timing: a bound of zero requires constant or decreasing counts. Each supplied workload runs exactly once, small before large; the library never creates fixtures, warms up, clears caches, or silently reruns your block. Choose genuinely different input sizes and prepare sufficient data yourself. Setup performed inside a workload is counted.
+
+Counts include non-cached `sql.active_record` events, including reads, writes, and transaction statements, but exclude `SCHEMA` events and empty SQL. Cache hits are counted separately. Existing cache state is preserved: for cold-query regression tests wrap the assertions in `ActiveRecord::Base.uncached`; for warm-cache tests warm up explicitly outside measurement. These are notification counts, not network round trips (e.g. a multi-statement event counts once).
+
+Captures are fiber-local; nested captures are inclusive for the parent and independent for the child. Exceptions and nonlocal exits restore the parent scope. Child fibers, threads, and asynchronous queries are not included. Unlike N+1 matchers, these explicit counts remain active when AndOne is disabled/paused and do not apply ignores or detection thresholds. They neither start an N+1 scan nor change reporting settings: existing or nested application scans retain their normal enforcement and can still raise `NPlus1Error`. Failures show small/large counts and bounded query locations without retaining SQL or bind values. Query budgets complement, rather than prove the absence of, N+1 behavior.
 
 ## Behavior by Environment
 

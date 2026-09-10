@@ -88,6 +88,35 @@ class TestLoadOrder < Minitest::Test
             expect { expect {}.to cause_n_plus_one }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none were detected/)
             expect { expect { load_children }.not_to cause_n_plus_one }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /children/)
           end
+          it "measures physical query budgets" do
+            expect { load_children }.to stay_within_query_budget(4)
+            expect { load_children }.not_to stay_within_query_budget(2)
+            expect do
+              expect { load_children }.to stay_within_query_budget(2)
+            end.to raise_error(RSpec::Expectations::ExpectationNotMetError, /4 executed queries/)
+            expect do
+              expect {}.not_to stay_within_query_budget(0)
+            end.to raise_error(RSpec::Expectations::ExpectationNotMetError, /0 executed queries/)
+          end
+          it "measures explicit growth workloads once" do
+            calls = []
+            workloads = {
+              small: -> { calls << :small; Parent.limit(1).each { |p| p.children.to_a } },
+              large: -> { calls << :large; load_children }
+            }
+            expect(workloads).to stay_within_query_growth(2)
+            expect(calls).to eq([:small, :large])
+            expect(workloads).not_to stay_within_query_growth(0)
+            expect do
+              expect(workloads).to stay_within_query_growth(0)
+            end.to raise_error(RSpec::Expectations::ExpectationNotMetError, /query growth 2.*small: 2 executed queries.*large: 4 executed queries/)
+            expect do
+              expect(workloads).not_to stay_within_query_growth(2)
+            end.to raise_error(RSpec::Expectations::ExpectationNotMetError, /expected not to/)
+            small = -> { Parent.limit(1).preload(:children).each { |p| p.children.to_a } }
+            large = -> { Parent.limit(3).preload(:children).each { |p| p.children.to_a } }
+            expect(small: small, large: large).to stay_within_query_growth
+          end
           it "rejects nesting" do
             AndOne.scan do
               expect { expect { nil }.not_to cause_n_plus_one }.to raise_error(ArgumentError, /active scan/)
