@@ -6,7 +6,7 @@ require "time"
 
 module AndOne
   # Tracks unique N+1 detections across requests/jobs in a server session.
-  # Each unique N+1 (by fingerprint) is only reported once.
+  # Each unique N+1 (by issue identity) is only reported once.
   # Subsequent occurrences are silently counted.
   #
   # Data is stored on disk (JSON) so detections are shared across all Puma
@@ -14,7 +14,7 @@ module AndOne
   #
   # The aggregate can be queried at any time:
   #   AndOne.aggregate.summary    # => formatted string
-  #   AndOne.aggregate.detections # => { fingerprint => Entry }
+  #   AndOne.aggregate.detections # => { issue_id => Entry }
   #   AndOne.aggregate.reset!
   #
   class Aggregate
@@ -29,9 +29,9 @@ module AndOne
     end
 
     # Record a detection. Returns true if this is a NEW unique detection
-    # (first time seeing this fingerprint), false if it's a repeat.
+    # (first time seeing this issue identity), false if it's a repeat.
     def record(detection)
-      fp = detection.fingerprint
+      fp = detection.issue_id
 
       with_lock do
         data = read_data
@@ -84,7 +84,7 @@ module AndOne
 
       lines = []
       lines << ""
-      lines << "🏀 AndOne Session Summary: #{entries.size} unique N+1 pattern#{"s" if entries.size != 1}"
+      lines << "🏀 AndOne Session Summary: #{entries.size} unique N+1 issue#{"s" if entries.size != 1}"
       lines << ("─" * 60)
 
       entries.each_with_index do |(fp, entry), i|
@@ -92,7 +92,8 @@ module AndOne
         lines << "  #{i + 1}) #{det.table_name || "unknown"} — #{entry.occurrences} occurrence#{"s" if entry.occurrences != 1}"
         lines << "     #{det.sample_query[0, 120]}"
         lines << "     origin: #{det.origin_frame}" if det.origin_frame
-        lines << "     fingerprint: #{fp}"
+        lines << "     fingerprint: #{det.fingerprint}"
+        lines << "     issue_id: #{fp}"
         lines << ""
       end
 
@@ -114,7 +115,12 @@ module AndOne
     def read_data
       return {} unless File.exist?(@data_path)
 
-      JSON.parse(File.read(@data_path))
+      JSON.parse(File.read(@data_path)).each_with_object({}) do |(_key, entry), data|
+        # Upgrade legacy shape-keyed entries using the one location they retained.
+        # Already-persisted issue IDs do not depend on the reader's application root.
+        entry["detection"] = serialize_detection(deserialize_entry(entry).detection) unless entry["detection"]["issue_id"]
+        data[entry["detection"]["issue_id"]] = entry
+      end
     rescue JSON::ParserError
       {}
     end
@@ -130,7 +136,10 @@ module AndOne
         "queries" => det.queries,
         "caller_strings" => det.raw_caller_strings,
         "count" => det.count,
-        "adapter" => det.adapter
+        "adapter" => det.adapter,
+        "fingerprint" => det.fingerprint,
+        "issue_id" => det.issue_id,
+        "connection_id" => det.connection_id
       }
     end
 
@@ -140,7 +149,9 @@ module AndOne
         queries: det_data["queries"],
         raw_caller_strings: det_data["caller_strings"],
         count: det_data["count"],
-        adapter: det_data["adapter"]
+        adapter: det_data["adapter"],
+        connection_id: det_data["connection_id"],
+        issue_id: det_data["issue_id"]
       )
       Entry.new(
         detection: det,

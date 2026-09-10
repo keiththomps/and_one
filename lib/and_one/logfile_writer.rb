@@ -4,7 +4,7 @@ require "json"
 require "fileutils"
 
 module AndOne
-  # Buffers N+1 detections in memory (deduplicated by fingerprint) and writes
+  # Buffers N+1 detections in memory (deduplicated by issue identity) and writes
   # them to a log file on process exit.  Handles parallel workers (forked test
   # processes, Puma cluster, etc.) by using file-level locking so all workers
   # safely append.  Truncation of stale data is handled at boot in the railtie,
@@ -23,11 +23,11 @@ module AndOne
       @entries = {}
     end
 
-    # Accept an array of Detection objects; deduplicate by fingerprint.
+    # Accept an array of Detection objects; deduplicate by issue identity.
     def record(detections)
       @mutex.synchronize do
         detections.each do |d|
-          @entries[d.fingerprint] ||= d
+          @entries[d.issue_id] ||= d
         end
       end
     end

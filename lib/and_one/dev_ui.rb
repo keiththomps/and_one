@@ -71,7 +71,8 @@ module AndOne
                        <div class="suggestion">#{fix}</div>
                        #{"<div class=\"strategy\">#{loading_hint}</div>" unless loading_hint.empty?}
                        #{"<div class=\"strict\">#{strict_hint}</div>" unless strict_hint.empty?}
-                       <div class="fingerprint">#{h(fp)}</div>
+                       <div class="fingerprint">fingerprint: #{h(det.fingerprint)}</div>
+                       <div class="fingerprint">issue_id: #{h(fp)}</div>
                      </td>
                    </tr>
                  HTML
@@ -111,7 +112,7 @@ module AndOne
         </head>
         <body>
           <h1>🏀 AndOne — N+1 Dashboard</h1>
-          <p class="subtitle">#{entries.size} unique N+1 pattern#{"s" if entries.size != 1} detected this session</p>
+          <p class="subtitle">#{entries.size} unique N+1 issue#{"s" if entries.size != 1} detected this session</p>
           <div class="actions">
             <a href="#{MOUNT_PATH}">↻ Refresh</a>
           </div>

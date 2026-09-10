@@ -150,7 +150,7 @@ path:lib/legacy/**
 query:schema_migrations
 query:pg_catalog
 
-# Ignore a specific detection by its fingerprint (shown in output)
+# Ignore a query shape at all locations by its fingerprint (shown in output)
 fingerprint:a1b2c3d4e5f6
 ```
 
@@ -163,11 +163,11 @@ This is especially useful for **N+1s coming from gems** where you can't add `.in
 | `gem:devise` | A gem you depend on has an N+1 you can't fix |
 | `path:app/views/admin/*` | An area of your app has known N+1s you've accepted |
 | `query:some_table` | A specific query pattern should always be ignored |
-| `fingerprint:abc123` | You want to silence one specific detection (shown in output) |
+| `fingerprint:abc123` | You want to silence a query shape at all locations/connections |
 
 ## Deduplication
 
-In development, the same N+1 can fire on every request, flooding your logs. AndOne automatically deduplicates — each unique pattern is reported only once per server session. Subsequent occurrences are silently counted.
+In development, the same N+1 can fire on every request, flooding your logs. AndOne automatically deduplicates — each unique issue (query shape + application origin + connection context) is reported only once per server session. Subsequent occurrences at that location are silently counted; the same SQL shape at a different location remains visible as a separate issue.
 
 Deduplication applies to logs, GitHub annotations, logfile output, and `notifications_callback` (which receives only newly observed findings). Scan results still contain every non-ignored finding in that scan. When `raise_on_detect` is enabled, **every violating scan raises**, even if the pattern was already reported by another scan. Test matchers do not report or consume first-occurrence deduplication.
 
@@ -175,9 +175,12 @@ You can check the session summary at any time:
 
 ```ruby
 AndOne.aggregate.summary    # formatted string of all unique N+1s
-AndOne.aggregate.size       # number of unique patterns
+AndOne.aggregate.size       # number of unique issues
+AndOne.aggregate.detections # { issue_id => Entry }; entry.detection.fingerprint is the broad ignore key
 AndOne.aggregate.reset!     # clear and start fresh
 ```
+
+Output includes a location-aware `issue_id` alongside the unchanged broad `fingerprint` ignore key. Stored entries retain both identities. Old shape-keyed entries are migrated using their retained location; reset once on upgrade to avoid duplicate historical entries without connection metadata. See [identity and eligibility limits](docs/sql-fingerprints.md#query-shape-versus-issue-identity).
 
 SQL normalization version 2 can change detection fingerprints. When upgrading, reset stale aggregate data and regenerate affected `fingerprint:` ignore entries. See [SQL fingerprints](docs/sql-fingerprints.md) for supported syntax, dialect limitations, and migration steps.
 
@@ -350,7 +353,7 @@ For manual `AndOne.scan` / `AndOne.finish` pairs, the caller must invoke `finish
 ## How It Works
 
 1. **Subscribe** to `sql.active_record` notifications (built into Rails)
-2. **Group** queries by call stack fingerprint
+2. **Group** eligible reads by ordered call stack and emitting connection context
 3. **Fingerprint** SQL to detect same-shape queries with different bind values
 4. **Resolve** table names back to ActiveRecord models and associations
 5. **Suggest** a candidate preload for basic record loading or operation-specific investigation guidance
