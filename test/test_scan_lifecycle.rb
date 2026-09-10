@@ -115,7 +115,6 @@ class TestScanLifecycle < Minitest::Test
     owned.define_singleton_method(:analyze) { raise "analysis failure" }
 
     assert_raises(RuntimeError) { AndOne.finish }
-    assert_nil owned.instance_variable_get(:@subscriber)
     assert_released
     assert_empty AndOne.finish
   end

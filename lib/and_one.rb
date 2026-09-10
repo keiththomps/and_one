@@ -5,6 +5,8 @@ require "active_record"
 require "rails/railtie"
 
 require_relative "and_one/version"
+require_relative "and_one/execution_context"
+require_relative "and_one/sql_subscriber"
 require_relative "and_one/test_capture"
 require_relative "and_one/reporting"
 
@@ -36,7 +38,7 @@ module AndOne
       @enabled != false
     end
 
-    # Start scanning for N+1 queries on the current thread.
+    # Start scanning for N+1 queries in the current fiber.
     # Can be used with a block or as start/finish pair.
     def scan
       return block_given? ? yield : nil unless enabled?
@@ -59,29 +61,29 @@ module AndOne
     end
 
     def scanning?
-      !!thread_state[:and_one_detector]
+      !!execution_context[:and_one_detector]
     end
 
     def pause
       if block_given?
-        was_paused = thread_state[:and_one_paused]
-        thread_state[:and_one_paused] = true
+        was_paused = execution_context[:and_one_paused]
+        execution_context[:and_one_paused] = true
         begin
           yield
         ensure
-          thread_state[:and_one_paused] = was_paused
+          execution_context[:and_one_paused] = was_paused
         end
       else
-        thread_state[:and_one_paused] = true
+        execution_context[:and_one_paused] = true
       end
     end
 
     def resume
-      thread_state[:and_one_paused] = false
+      execution_context[:and_one_paused] = false
     end
 
     def paused?
-      !!thread_state[:and_one_paused]
+      !!execution_context[:and_one_paused]
     end
 
     def aggregate
@@ -117,12 +119,13 @@ module AndOne
     private
 
     def start_scan
-      thread_state[:and_one_detector] = Detector.new(
+      execution_context[:and_one_detector] = Detector.new(
         allow_stack_paths: allow_stack_paths || [],
         ignore_queries: ignore_queries || [],
-        min_n_queries: effective_min_n_queries
+        min_n_queries: effective_min_n_queries,
+        ignore_list: ignore_list
       )
-      thread_state[:and_one_paused] = false
+      execution_context[:and_one_paused] = false
     end
 
     # Resolve the effective min_n_queries, checking per-environment thresholds
@@ -162,23 +165,18 @@ module AndOne
     end
 
     def release_scan(owned_detector)
-      owned_detector.send(:unsubscribe)
-    rescue StandardError
-      # Cleanup must not replace an application exception or nonlocal exit.
-      nil
-    ensure
-      if detector.equal?(owned_detector)
-        thread_state[:and_one_detector] = nil
-        thread_state[:and_one_paused] = false
-      end
+      return unless detector.equal?(owned_detector)
+
+      execution_context[:and_one_detector] = nil
+      execution_context[:and_one_paused] = false
     end
 
     def detector
-      thread_state[:and_one_detector]
+      execution_context[:and_one_detector]
     end
 
-    def thread_state
-      Thread.current
+    def execution_context
+      ExecutionContext
     end
 
     def apply_ignore_filter(detections)
@@ -248,3 +246,5 @@ require_relative "and_one/middleware"
 require_relative "and_one/active_job_hook"
 require_relative "and_one/sidekiq_middleware"
 require_relative "and_one/railtie" if defined?(Rails::Railtie)
+
+AndOne::SqlSubscriber.install!

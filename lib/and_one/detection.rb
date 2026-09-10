@@ -6,6 +6,7 @@ require "json"
 module AndOne
   # Represents a single N+1 detection: the repeated queries, their call site, and metadata.
   class Detection
+    # queries contains representative samples; count is the exact occurrence total.
     attr_reader :queries, :caller_locations, :count, :adapter, :connection_id
 
     def initialize(queries:, count:, caller_locations: nil, raw_caller_strings: nil, adapter: nil,

@@ -42,6 +42,11 @@ module AndOne
       @rules.any? { |rule| matches?(rule, detection, raw_caller_strings) }
     end
 
+    # Used during capture so query rules also see SQL beyond the sample limit.
+    def query_ignored?(sql)
+      @rules.any? { |rule| rule.type == :query && sql.include?(rule.pattern) }
+    end
+
     private
 
     def parse

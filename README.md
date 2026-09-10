@@ -24,7 +24,7 @@ AndOne stays completely invisible until it detects an N+1 query — then it poin
 - **GitHub Actions annotations** — N+1s appear as warning annotations on PR diffs
 - **`strict_loading` suggestions** — also suggests model-level prevention as an alternative
 - **Conservative association resolution** — handles unambiguous `belongs_to`, `has_one`, and `has_many`; abstains on complex or ambiguous SQL
-- **Thread-safe under Puma** — per-thread isolation verified with concurrent stress tests
+- **Isolated capture** — one SQL subscriber, fiber-local scans, and bounded representative query samples; verified with concurrent stress tests
 
 ## Recommendation limits
 
@@ -70,6 +70,14 @@ puts "Detected #{detections.size} repeated-query patterns"
 ```
 
 Standalone scans are enabled by default and do not raise unless configured. They do not install request/job hooks or Rails environment defaults until a Rails application boots. Normal scans persist findings under `tmp/and_one` by default; set `aggregate_path` before the first scan to change it. `require "and_one"` is safe before or after loading Rails.
+
+## Capture coverage and limits
+
+Scans capture synchronous ActiveRecord SQL in the **current fiber**. Child fibers/threads do not inherit scans; start independent scans inside them if needed. Async-tagged SQL is excluded because Rails may publish worker notifications later in an unrelated consumer's scan. Synchronous `load_async` fallback is captured normally. Lazy response-body SQL is outside request scan coverage.
+
+One process-level subscriber routes events to the active context. Each repeated shape/location retains its first five SQL samples plus an exact total count: `Detection#queries` is a sample, while `Detection#count` includes all eligible occurrences. Query-ignore rules still inspect every occurrence. Unique groups and individual SQL sizes are not capped.
+
+See [capture boundaries, retention, and benchmark commands](docs/capture.md) for details.
 
 ## What You'll See
 
