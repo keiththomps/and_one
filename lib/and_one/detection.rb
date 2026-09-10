@@ -11,8 +11,7 @@ module AndOne
     attr_reader :queries, :caller_locations, :count, :adapter, :connection_id, :query_cost
 
     # Keep the legacy keyword construction API while adding optional measurements.
-    # rubocop:disable Metrics/ParameterLists
-    def initialize(queries:, count:, caller_locations: nil, raw_caller_strings: nil, adapter: nil,
+    def initialize(queries:, count:, caller_locations: nil, raw_caller_strings: nil, adapter: nil, # rubocop:disable Metrics/ParameterLists
                    connection_id: nil, issue_id: nil, fingerprint: nil, query_cost: nil)
       @query_cost = query_cost
       @queries = queries
@@ -24,7 +23,6 @@ module AndOne
       @issue_id = issue_id
       @fingerprint = fingerprint
     end
-    # rubocop:enable Metrics/ParameterLists
 
     # Returns the SQL of the first query as the representative example
     def sample_query

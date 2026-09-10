@@ -20,6 +20,22 @@ runtime dependencies of AndOne. Use upstream-compatible dependency versions in
 applications too. The earlier ModuleLength offense has already been resolved by
 existing configuration/reporting extractions; the matrix runs lint without disabling it.
 
+### MySQL driver limitation
+
+The test Gemfile excludes **mysql2 0.5.7**, which can segfault when Rails reads
+field metadata from an empty prepared-query result. This reproduces with plain
+ActiveRecord and no AndOne loaded; batching can trigger it when fetching past the
+last row. See [mysql2 #1426](https://github.com/brianmario/mysql2/issues/1426) and
+[the merged fix #1427](https://github.com/brianmario/mysql2/pull/1427). At the time
+of verification the fix is not released; the matrix resolves mysql2 0.5.6.
+Prepared statements and empty-result/batching checks remain enabled.
+
+Applications using the affected release should choose a verified driver version,
+for example `gem "mysql2", "~> 0.5", "!= 0.5.7"`, and run their own tests. AndOne
+does not monkey-patch the native driver, disable prepared statements, or enforce
+this optional dependency at runtime. Revisit the exclusion when a fixed release
+is available and passes the empty-result regression.
+
 The fast default remains `bundle exec rake`. To reproduce a matrix job, select its
 Ruby first (for example `mise use ruby@3.2`, or your preferred version manager):
 
@@ -75,7 +91,8 @@ there is deliberately no aggregate accuracy/marketing score.
 
 A separate integration check asserts prepared statements are enabled, observes real
 adapter bind metadata on repeated association queries, and checks preload removes
-the finding. Schema creation, fixture writes, and model metadata warmup are outside
+the finding. An additional regression checks empty bound results remain readable
+and their executed queries are measured. Schema creation, fixture writes, and model metadata warmup are outside
 both scan and measurement. Each measurement begins uncached; only the cache scenario
 explicitly enables caching within that scope. Counts exclude cache hits, schema
 notifications, and transaction control. No timing assertions or arbitrary workload
