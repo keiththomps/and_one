@@ -81,6 +81,27 @@ class TestRailsConfiguration < Minitest::Test
     RUBY
   end
 
+  def test_toast_in_real_rails_middleware_stack
+    boot("development", initializer: "AndOne.logfile = nil; Rails.application.config.hosts.clear",
+                        before: 'ENV["DATABASE_URL"] = "sqlite3::memory:"', assertions: <<~RUBY)
+                          class ToastController < ActionController::Base
+                            def index
+                              3.times do
+                                ActiveSupport::Notifications.instrument("sql.active_record", sql: "SELECT * FROM posts WHERE id = 1", name: "Post Load")
+                              end
+                              response.set_header("Content-Security-Policy", "default-src 'none'")
+                              render html: "<html><body>Rails page</body></html>".html_safe
+                            end
+                          end
+                          Rails.application.routes.draw { get "/toast", to: "toast#index" }
+                          response = Rack::MockRequest.new(Rails.application).get("http://localhost/toast")
+                          abort "status: \#{response.status} \#{response.body}" unless response.status == 200
+                          abort "missing fallback" unless response.body.include?("<details>") && response.body.include?("posts")
+                          abort "inline script" if response.body.include?("<script>")
+                          abort "changed CSP" unless response["content-security-policy"] == "default-src 'none'"
+                        RUBY
+  end
+
   def test_explicit_production_enable
     boot("production", initializer: "AndOne.enabled = true; AndOne.raise_on_detect = true", assertions: <<~RUBY)
       abort "disabled" unless AndOne.enabled? && AndOne.raise_on_detect
