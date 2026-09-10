@@ -33,7 +33,7 @@ module AndOne
         FileUtils.mkdir_p(@root, mode: 0o700)
         with_registry_lock do
           FileUtils.mkdir_p(path, mode: 0o700)
-          @lease = File.open(File.join(path, "session.lock"), File::RDWR | File::CREAT, 0o600) # rubocop:disable Style/FileOpen -- lifetime lease
+          @lease = File.new(File.join(path, "session.lock"), File::RDWR | File::CREAT, 0o600)
           @lease.flock(File::LOCK_SH)
           FileUtils.touch(File.join(path, "session.lock"))
         end
