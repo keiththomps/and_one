@@ -47,6 +47,7 @@ module AndOne
       lines << colorize("  #{index}) #{detection.count}x repeated query on `#{detection.table_name || "unknown"}`",
                         :yellow, :bold)
       lines << colorize("     fingerprint: #{detection.fingerprint}", :dim)
+      lines << colorize("     issue_id: #{detection.issue_id}", :dim)
       lines << ""
 
       # Sample query

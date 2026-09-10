@@ -2,6 +2,8 @@
 
 ### Fixed
 
+- Recognize case-insensitive reads and read CTEs conservatively, preserve ordered stack frames, and attribute/isolate SQL using the emitting connection (#5).
+- Keep the same SQL shape visible at distinct application locations and connection contexts across aggregate, dashboard, and logfile output (#6).
 - Resolve unambiguous belongs-to/has-one/has-many association directions and custom keys without retaining stale model caches; abstain on ambiguous/complex associations (#11).
 - Qualify preload advice, separate COUNT/EXISTS/scalar guidance, and label heuristic fix locations across text, JSON, dashboard, and GitHub annotations (#12).
 - Load runtime dependencies explicitly for standalone ActiveRecord use and register Rails/RSpec integrations safely in either require order (#18).
@@ -12,6 +14,7 @@
 
 ### Changed
 
+- Aggregate keys are now location-aware `issue_id` values; the existing `fingerprint` and broad ignore contract are unchanged. Legacy entries are rekeyed from their retained location; reset once to avoid duplicates from missing historical connection metadata (#6).
 - Package only runtime Ruby files and documentation; remove the placeholder RBS file (#18).
 - Matchers no longer report or consume aggregate deduplication; ignores and disabled-state behavior still apply (#13).
 - **Fingerprint migration:** normalization version 2 can change detection IDs. Reset stale aggregate data and regenerate affected `fingerprint:` ignore rules. See [SQL fingerprints](docs/sql-fingerprints.md) for details and dialect limitations.

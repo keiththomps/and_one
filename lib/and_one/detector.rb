@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require_relative "read_statement"
+require_relative "connection_context"
+
 module AndOne
   # Subscribes to ActiveRecord SQL notifications and detects N+1 query patterns.
   # Each instance tracks queries for a single request/block scope.
@@ -58,11 +61,13 @@ module AndOne
         name = payload[:name]
 
         next if name == "SCHEMA"
-        next unless sql.include?("SELECT")
         next if payload[:cached]
         next if current_detector.send(:ignored?, sql)
 
-        current_detector.send(:record_query, sql, payload)
+        metadata = ConnectionContext.metadata(payload)
+        next unless ReadStatement.eligible?(sql, adapter: metadata[:connection_adapter])
+
+        current_detector.send(:record_query, sql, metadata)
       end
     end
 
@@ -71,9 +76,9 @@ module AndOne
       @subscriber = nil
     end
 
-    def record_query(sql, payload)
+    def record_query(sql, metadata)
       locations = caller_locations
-      location_key = location_fingerprint(locations)
+      location_key = [location_fingerprint(locations), metadata[:connection_id]]
 
       @query_counter[location_key] += 1
       @query_holder[location_key] << sql
@@ -82,25 +87,11 @@ module AndOne
       return unless @query_counter[location_key] >= 2
 
       @query_callers[location_key] = locations
-      @query_metadata[location_key] ||= {
-        connection_adapter: adapter_name,
-        type_casted_binds: payload[:type_casted_binds]
-      }
+      @query_metadata[location_key] ||= metadata
     end
 
     def location_fingerprint(locations)
-      # Build a hash from the call stack to group identical call paths
-      key = 0
-      locations.each do |loc|
-        key = key ^ loc.path.hash ^ loc.lineno
-      end
-      key
-    end
-
-    def adapter_name
-      ActiveRecord::Base.connection_db_config.adapter
-    rescue StandardError
-      "unknown"
+      locations.map { |loc| [loc.path, loc.lineno] }
     end
 
     def analyze
@@ -128,7 +119,8 @@ module AndOne
             queries: query_group,
             caller_locations: callers,
             count: query_group.size,
-            adapter: metadata[:connection_adapter]
+            adapter: metadata[:connection_adapter],
+            connection_id: metadata[:connection_id]
           )
         end
       end

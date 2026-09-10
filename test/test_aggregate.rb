@@ -21,14 +21,11 @@ class TestAggregate < Minitest::Test
     report_count = 0
     AndOne.notifications_callback = ->(*) { report_count += 1 }
 
-    # First scan — should report
-    AndOne.scan do
-      Post.all.each { |post| post.comments.to_a }
-    end
-
-    # Second scan — same N+1, should NOT report again
-    AndOne.scan do
-      Post.all.each { |post| post.comments.to_a }
+    # Same application call site on both scans should report only once.
+    2.times do
+      AndOne.scan do
+        Post.all.each { |post| post.comments.to_a }
+      end
     end
 
     assert_equal 1, report_count
@@ -75,7 +72,7 @@ class TestAggregate < Minitest::Test
     end
 
     summary = AndOne.aggregate.summary
-    assert_includes summary, "1 unique N+1 pattern"
+    assert_includes summary, "1 unique N+1 issue"
     assert_includes summary, "comments"
     assert_includes summary, "1 occurrence"
   end

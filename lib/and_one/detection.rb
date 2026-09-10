@@ -1,18 +1,22 @@
 # frozen_string_literal: true
 
 require "digest"
+require "json"
 
 module AndOne
   # Represents a single N+1 detection: the repeated queries, their call site, and metadata.
   class Detection
-    attr_reader :queries, :caller_locations, :count, :adapter
+    attr_reader :queries, :caller_locations, :count, :adapter, :connection_id
 
-    def initialize(queries:, count:, caller_locations: nil, raw_caller_strings: nil, adapter: nil)
+    def initialize(queries:, count:, caller_locations: nil, raw_caller_strings: nil, adapter: nil,
+                   connection_id: nil, issue_id: nil)
       @queries = queries
       @caller_locations = caller_locations
       @raw_caller_strings_override = raw_caller_strings
       @count = count
       @adapter = adapter
+      @connection_id = connection_id
+      @issue_id = issue_id
     end
 
     # Returns the SQL of the first query as the representative example
@@ -34,6 +38,25 @@ module AndOne
         sql_fp = Fingerprint.generate(sample_query, adapter: adapter)
         Digest::SHA256.hexdigest("#{sql_fp}:#{table_name}")[0, 12]
       end
+    end
+
+    # Unlike fingerprint (the public broad ignore key), this identifies a
+    # query shape at one application call site on one configured connection.
+    def issue_id
+      @issue_id ||= Digest::SHA256.hexdigest([fingerprint, normalized_origin, adapter, connection_id].to_json)[0, 24]
+    end
+
+    def normalized_origin
+      frame = origin_frame
+      return nil unless frame
+
+      path, line = frame.split(/:(\d+)/, 3)
+      root = defined?(Rails) && Rails.respond_to?(:root) && Rails.root ? Rails.root.to_s : Dir.pwd
+      path = path.delete_prefix("#{root}/")
+      path = path.sub(%r{\A/.*?/(app|lib|test|spec)/}, '\\1/')
+      # Outside the application root, only retain a portable filename.
+      path = File.basename(path) if path.start_with?("/")
+      [path, line].compact.join(":")
     end
 
     # The raw caller strings (before backtrace cleaning)
