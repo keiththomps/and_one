@@ -2,15 +2,19 @@
 
 require "digest"
 require "json"
+require_relative "query_cost"
 
 module AndOne
   # Represents a single N+1 detection: the repeated queries, their call site, and metadata.
   class Detection
     # queries contains representative samples; count is the exact occurrence total.
-    attr_reader :queries, :caller_locations, :count, :adapter, :connection_id
+    attr_reader :queries, :caller_locations, :count, :adapter, :connection_id, :query_cost
 
+    # Keep the legacy keyword construction API while adding optional measurements.
+    # rubocop:disable Metrics/ParameterLists
     def initialize(queries:, count:, caller_locations: nil, raw_caller_strings: nil, adapter: nil,
-                   connection_id: nil, issue_id: nil, fingerprint: nil)
+                   connection_id: nil, issue_id: nil, fingerprint: nil, query_cost: nil)
+      @query_cost = query_cost
       @queries = queries
       @caller_locations = caller_locations
       @raw_caller_strings_override = raw_caller_strings
@@ -20,6 +24,7 @@ module AndOne
       @issue_id = issue_id
       @fingerprint = fingerprint
     end
+    # rubocop:enable Metrics/ParameterLists
 
     # Returns the SQL of the first query as the representative example
     def sample_query

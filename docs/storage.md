@@ -79,7 +79,12 @@ the retained history, not lifetime totals. Each retained first occurrence holds:
 
 - at most 5 SQL samples, each at most 2,048 UTF-8 bytes;
 - at most 20 backtrace frames, each at most 256 UTF-8 bytes;
-- bounded adapter/connection labels, original count, and stable identities.
+- bounded adapter/connection labels, original count, and stable identities;
+- constant-space query cost summaries for the first occurrence and all retained
+  occurrences (count, timed count, total/min/max milliseconds, coverage).
+
+[Cost metrics](capture.md#observed-finding-costs) survive persistence reloads;
+missing historical metrics remain unknown and are not extrapolated.
 
 Truncation does not recompute the original fingerprint or issue ID. Detection
 thresholds, scan results, and ignores operate on the original capture, before

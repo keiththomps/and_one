@@ -17,7 +17,7 @@ AndOne stays completely invisible until it detects an N+1 query — then it poin
 - **Bounded deduplication** — occurrence counts with in-memory storage by default and opt-in shared, session-scoped file storage
 - **Test matchers** — Minitest (`assert_no_n_plus_one`) and RSpec (`expect { }.not_to cause_n_plus_one`)
 - **Dev toast notifications** — in-page toast on every page that triggers an N+1, with a link to the dashboard
-- **Dev UI dashboard** — browse `/__and_one` in development for a live N+1 overview
+- **Dev UI dashboard** — browse `/__and_one` in development; rank findings by observed SQL time, occurrences, or executed query count
 - **Rails console integration** — auto-scans in `rails console` and prints warnings inline
 - **Structured JSON logging** — JSON output mode for Datadog, Splunk, and other log aggregation services
 - **Per-environment thresholds** — different `min_n_queries` for development vs test
@@ -79,7 +79,9 @@ Scans capture synchronous ActiveRecord SQL in the **current fiber**. Child fiber
 
 One process-level subscriber routes events to the active context. Each repeated shape/location retains its first five SQL samples plus an exact total count: `Detection#queries` is a sample, while `Detection#count` includes all eligible occurrences. Query-ignore rules still inspect every occurrence. Unique groups and individual SQL sizes are not capped.
 
-See [capture boundaries, retention, and benchmark commands](docs/capture.md) for details.
+Findings expose `query_cost` timing summaries from monotonic SQL notifications; aggregate entries roll them up across repeated occurrences. Cache hits and async work are excluded, and historical missing costs remain unknown. These are observed costs, not estimated savings. JSON rollups are available through `AndOne::JsonFormatter.new.format_aggregate(AndOne.aggregate.detections)`.
+
+See [capture boundaries, measured costs, retention, and benchmark commands](docs/capture.md) for details.
 
 ## What You'll See
 

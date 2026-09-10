@@ -19,7 +19,7 @@ module AndOne
   #   AndOne.aggregate.reset!
   #
   class Aggregate
-    Entry = Struct.new(:detection, :occurrences, :first_seen_at, :last_seen_at)
+    Entry = Struct.new(:detection, :occurrences, :first_seen_at, :last_seen_at, :query_cost)
 
     MAX_ENTRIES = 100
     MAX_SAMPLES = 5
@@ -101,10 +101,11 @@ module AndOne
       existing = data.delete(key)
       now = Time.now.iso8601
       data[key] = if existing
-                    existing.merge("occurrences" => existing.fetch("occurrences") + 1, "last_seen_at" => now)
+                    existing.merge("occurrences" => existing.fetch("occurrences") + 1, "last_seen_at" => now,
+                                   "query_cost" => merged_cost(existing, detection)&.to_h)
                   else
                     { "detection" => serialize_detection(detection), "occurrences" => 1,
-                      "first_seen_at" => now, "last_seen_at" => now }
+                      "first_seen_at" => now, "last_seen_at" => now, "query_cost" => detection.query_cost&.to_h }
                   end
       data.shift while data.size > MAX_ENTRIES
       !existing
@@ -117,10 +118,20 @@ module AndOne
 
         bounded_entry = { "detection" => serialize_detection(detection), "occurrences" => entry["occurrences"],
                           "first_seen_at" => parse_time(entry["first_seen_at"])&.iso8601,
-                          "last_seen_at" => parse_time(entry["last_seen_at"])&.iso8601 }
+                          "last_seen_at" => parse_time(entry["last_seen_at"])&.iso8601,
+                          "query_cost" => stored_cost(entry)&.to_h }
         [detection.issue_id, bounded_entry]
       end
       data.replace(normalized)
+    end
+
+    def stored_cost(entry)
+      QueryCost.new(entry["query_cost"]) if entry["query_cost"]
+    end
+
+    def merged_cost(entry, detection)
+      previous = stored_cost(entry)
+      previous ? previous.merge(detection.query_cost) : detection.query_cost
     end
 
     def safely(default:)
@@ -147,6 +158,7 @@ module AndOne
         "queries" => det.queries.first(MAX_SAMPLES).map { |sql| bounded(sql, MAX_SQL_BYTES) },
         "caller_strings" => det.raw_caller_strings.first(MAX_FRAMES).map { |frame| bounded(frame, MAX_FRAME_BYTES) },
         "count" => det.count,
+        "query_cost" => det.query_cost&.to_h,
         "adapter" => det.adapter && bounded(det.adapter, 128),
         "fingerprint" => det.fingerprint,
         "issue_id" => det.issue_id,
@@ -163,13 +175,15 @@ module AndOne
         adapter: det_data["adapter"],
         connection_id: det_data["connection_id"],
         issue_id: det_data["issue_id"],
-        fingerprint: det_data["fingerprint"]
+        fingerprint: det_data["fingerprint"],
+        query_cost: stored_cost(det_data)
       )
       Entry.new(
         detection: det,
         occurrences: entry_data["occurrences"],
         first_seen_at: parse_time(entry_data["first_seen_at"]),
-        last_seen_at: parse_time(entry_data["last_seen_at"])
+        last_seen_at: parse_time(entry_data["last_seen_at"]),
+        query_cost: stored_cost(entry_data)
       )
     end
 

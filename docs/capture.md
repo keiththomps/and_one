@@ -67,6 +67,51 @@ are evaluated during capture against the ignore-list instance selected at scan
 start. Reload ignore files between scans, not during a scan. Other ignore rules
 and thresholds continue to apply normally.
 
+## Observed finding costs
+
+SQL notification start/finish timestamps use ActiveSupport's monotonic subscriber.
+Each finding's `query_cost` records `query_count`, `timed_query_count`,
+`total_duration_ms`, `min_duration_ms`, `max_duration_ms`, and `occurrences` (one
+for a scan-local finding). `query_cost.to_h` also includes `mean_duration_ms`
+(the mean over timed queries) and `cached_queries: "excluded"`.
+
+These metrics cover **only the eligible executed reads in that finding**, not
+all SQL in the request/job. Existing thresholds, ignores, pause/fiber boundaries,
+and async/schema/cache exclusions are unchanged. Cache hits do not contribute
+to counts or time. Timing is the observed SQL notification interval, including
+adapter overhead, not database-server CPU time, request wall time, or estimated
+avoidable work. No savings estimate is produced.
+
+Direct `Detector#record` calls without `duration_ms:` still count queries, but
+have no timing. Negative, nonfinite, and missing durations are not measured;
+zero is a valid measurement. Check `timed_query_count` before interpreting a
+zero total; mean/min/max are null when nothing was timed. Partial timing totals
+sum only known intervals, never extrapolate to missing queries.
+
+`Detection#query_cost` and JSON `query_cost` describe a single finding occurrence.
+`AndOne.aggregate.detections` entries expose cumulative `query_cost` across all
+retained occurrences, even when repeated findings are deduplicated from logs.
+Query count, time total, and extrema merge in constant space; no individual
+query timings or bind values are retained. Historical entries without metrics
+remain unknown. After a new observation, the cost's `occurrences` reports its
+coverage relative to the entry's total occurrences; historical counts/times
+are never invented. Retention/eviction/reset also resets the cost history.
+
+To export rollups (always a JSON array):
+
+```ruby
+AndOne::JsonFormatter.new.format_aggregate(AndOne.aggregate.detections)
+# Each entry includes occurrences, first_seen_at, last_seen_at,
+# cumulative_query_cost, and the original finding's query_cost.
+```
+
+The dashboard defaults to descending cumulative observed time. Links select
+`?sort=time`, `?sort=occurrences`, or `?sort=queries`; unknown historical metrics
+sort last and ties use issue ID. Rows label executed/timed query counts and
+occurrence coverage. Totals are not comparable as complete costs when coverage
+is partial. Memory/storage add only a fixed-size summary per group/issue, not
+an event history; the existing distinct-group memory caveat still applies.
+
 ## Reproducible benchmark
 
 ```sh

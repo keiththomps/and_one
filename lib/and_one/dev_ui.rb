@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "uri"
+
 module AndOne
   # A tiny Rack endpoint that shows all N+1s detected in the current server
   # session. Mount at `/__and_one` in development to get a mini dashboard
@@ -26,18 +28,41 @@ module AndOne
 
     private
 
-    def serve_dashboard(_env)
-      entries = AndOne.aggregate.detections
+    def serve_dashboard(env)
+      entries = sorted_entries(AndOne.aggregate.detections, env["QUERY_STRING"])
 
       html = render_html(entries)
       [200, { "content-type" => "text/html; charset=utf-8" }, [html]]
+    end
+
+    def sorted_entries(entries, query)
+      sort = URI.decode_www_form(query.to_s).to_h["sort"]
+      sort = "time" unless %w[time occurrences queries].include?(sort)
+      entries.sort_by do |key, entry|
+        cost = entry.query_cost
+        value = case sort
+                when "occurrences" then entry.occurrences
+                when "queries" then cost&.query_count
+                else cost.total_duration_ms if cost&.timed_query_count&.positive?
+                end
+        [value.nil? ? 1 : 0, -(value || 0), key]
+      end.to_h
+    end
+
+    def cost_cell(entry)
+      cost = entry.query_cost
+      return "Unknown (historical)" unless cost
+
+      time = cost.timed_query_count.positive? ? "#{format("%.3f", cost.total_duration_ms)} ms observed" : "Time unknown"
+      [time, "#{cost.query_count} executed queries; #{cost.timed_query_count} timed",
+       "Coverage: #{cost.occurrences}/#{entry.occurrences} occurrences"].map { |text| h(text) }.join("<br>")
     end
 
     def render_html(entries)
       rows = if entries.empty?
                <<~HTML
                  <tr>
-                   <td colspan="6" class="empty">
+                   <td colspan="7" class="empty">
                      No N+1 queries detected yet.
                    </td>
                  </tr>
@@ -62,6 +87,7 @@ module AndOne
                      <td>#{i + 1}</td>
                      <td><code>#{h(det.table_name || "unknown")}</code></td>
                      <td>#{entry.occurrences}</td>
+                     <td>#{cost_cell(entry)}</td>
                      <td><code class="sql">#{h(truncate(det.sample_query, 200))}</code></td>
                      <td>
                        <div class="origin">#{h(origin)}</div>
@@ -115,13 +141,18 @@ module AndOne
           <p class="subtitle">#{entries.size} unique N+1 issue#{"s" if entries.size != 1} detected this session</p>
           <div class="actions">
             <a href="#{MOUNT_PATH}">↻ Refresh</a>
+            <a href="#{MOUNT_PATH}?sort=time">Sort by observed time</a>
+            <a href="#{MOUNT_PATH}?sort=occurrences">Sort by occurrences</a>
+            <a href="#{MOUNT_PATH}?sort=queries">Sort by executed queries</a>
           </div>
+          <p class="subtitle">SQL notification time, not estimated savings. Cache hits and async queries excluded. Unknown historical costs sort last.</p>
           <table>
             <thead>
               <tr>
                 <th>#</th>
                 <th>Table</th>
-                <th>Count</th>
+                <th>Occurrences</th>
+                <th>Observed SQL cost</th>
                 <th>Query</th>
                 <th>Location</th>
                 <th>Suggested investigation</th>

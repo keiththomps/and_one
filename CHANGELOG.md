@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- Measure eligible SQL notification costs with monotonic timing, persist constant-space per-issue rollups, expose JSON summaries, and sort the dashboard by observed time, occurrences, or executed queries; label cache exclusions and unknown historical coverage (#22).
+
 ### Fixed
 
 - Preserve shared aggregate/log findings across boots, isolate environment/test sessions, and provide explicit reset and bounded stale-session cleanup (#8).
