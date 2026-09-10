@@ -26,6 +26,21 @@ AndOne stays completely invisible until it detects an N+1 query — then it poin
 - **Conservative association resolution** — handles unambiguous `belongs_to`, `has_one`, and `has_many`; abstains on complex or ambiguous SQL
 - **Isolated capture** — one SQL subscriber, fiber-local scans, and bounded representative query samples; verified with concurrent stress tests
 
+## Finding classification
+
+Repeated SQL is evidence, not proof of an association N+1. Findings expose `kind` and `confidence` (symbols in Ruby, strings in JSON):
+
+| Kind | Confidence | Evidence |
+|---|---|---|
+| `suspected_association_n_plus_one` | `candidate` | Varying value signatures in simple record SELECTs with qualified equality/IN predicates |
+| `duplicate_identical_read` | `observed` | All executed reads have identical lexical SQL/value signatures |
+| `repeated_aggregate` | `observed` | COUNT, SUM/AVG/MIN/MAX, or EXISTS-style projection; no record-preload advice |
+| `generic_repetition` | `unknown` | Missing/unsupported evidence, scalar or complex varying reads |
+
+Signatures use a random per-scan HMAC key and retain only one digest per group, never raw bind values. Already materialized primitive `type_casted_binds` arrays can be compared; lazy callbacks and bind objects are never evaluated. Literal SQL is compared only where lexical evidence is supported. Missing evidence on even a late occurrence makes value-based classification abstain. See [signature bounds and limitations](docs/capture.md#classification-evidence).
+
+Variation is across the **whole value vector**, not proof of different parents or Ruby association calls. Intentional batching can still produce findings. Identical reads need not return identical results or be safe to cache. Existing thresholds, ignores, counts, fingerprints, issue IDs, `NPlus1Error`, matchers, and the legacy JSON event name remain unchanged: enforcement still applies to **all** finding kinds. Aggregate classification describes its retained representative scan, not merged evidence across requests; older/manual detections default to generic/unknown.
+
 ## Recommendation limits
 
 SQL alone does not prove which Ruby association was called. Association advice uses currently loaded models and qualified equality/`IN` predicates in plain, single-table SELECTs. Both foreign keys and `belongs_to` target primary keys (including custom single-column keys) are considered. Multiple matching associations/models, through associations, polymorphic associations, joins, aliases, CTEs, composite keys, and other complex SQL may receive only non-actionable guidance. Models and reflections are not cached: late-loaded models and Rails-reloaded classes are considered on the next resolution without retaining stale misses/classes.
@@ -89,16 +104,17 @@ When an N+1 is detected, you get output like:
 
 ```
 ──────────────────────────────────────────────────────────────────────────
- 🏀 And One! 1 N+1 query detected
+ 🏀 And One! 1 repeated-query finding detected
 ──────────────────────────────────────────────────────────────────────────
 
   1) 9x repeated query on `comments`
+     suspected association N+1 (candidate)
      fingerprint: a1b2c3d4e5f6
 
   Query:
     SELECT "comments".* FROM "comments" WHERE "comments"."post_id" = ?
 
-  Origin (where the N+1 is triggered):
+  Origin (where the repeated query is triggered):
   → app/views/posts/index.html.erb:5
 
   Possible fix location (heuristic; inspect the caller):
@@ -310,7 +326,7 @@ Captures are fiber-local; nested captures are inclusive for the parent and indep
 
 ## Capture privacy and dashboard access
 
-The default `AndOne.capture_mode = :redacted` replaces SQL string/numeric/boolean literals, bind placeholders, comments (including hints), and opaque/unterminated tokens with `?` **before retaining samples**. Bind values and lazy bind callbacks are not retained or evaluated. This affects returned detections, callbacks, exceptions, text/JSON output, logs, aggregate storage, and the dashboard—not SQL execution. Fingerprints and query-ignore matching use original SQL before redaction, including occurrences beyond the sample limit. Caller/path/gem ignores inspect the original stack before capture limits.
+The default `AndOne.capture_mode = :redacted` replaces SQL string/numeric/boolean literals, bind placeholders, comments (including hints), and opaque/unterminated tokens with `?` **before retaining samples**. Bind values are never retained; already materialized primitive arrays may be hashed for classification. Lazy bind callbacks are never evaluated. This affects returned detections, callbacks, exceptions, text/JSON output, logs, aggregate storage, and the dashboard—not SQL execution. Fingerprints and query-ignore matching use original SQL before redaction, including occurrences beyond the sample limit. Caller/path/gem ignores inspect the original stack before capture limits.
 
 Each detection retains at most **5 SQL samples × 2,048 bytes** and **20 frames × 256 bytes** in either mode. Frames prioritize application code while preserving stack order. Default frames remove absolute application prefixes; external paths become portable suffixes/filenames. `raw_caller_strings` now means policy-limited strings before optional backtrace cleaning; `caller_locations` contains bounded snapshots with `path`, `absolute_path`, `lineno`, and `to_s` accessors.
 

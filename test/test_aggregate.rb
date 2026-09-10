@@ -72,7 +72,7 @@ class TestAggregate < Minitest::Test
     end
 
     summary = AndOne.aggregate.summary
-    assert_includes summary, "1 unique N+1 issue"
+    assert_includes summary, "1 unique repeated-query issue"
     assert_includes summary, "comments"
     assert_includes summary, "1 occurrence"
   end
@@ -101,6 +101,6 @@ class TestAggregate < Minitest::Test
 
   def test_empty_summary
     summary = AndOne.aggregate.summary
-    assert_includes summary, "No N+1 queries detected"
+    assert_includes summary, "No repeated-query findings detected"
   end
 end

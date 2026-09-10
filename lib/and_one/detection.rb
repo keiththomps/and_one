@@ -10,11 +10,13 @@ module AndOne
   # Represents a single N+1 detection: the repeated queries, their call site, and metadata.
   class Detection
     # queries contains representative samples; count is the exact occurrence total.
-    attr_reader :queries, :caller_locations, :count, :adapter, :connection_id, :query_cost
+    attr_reader :queries, :caller_locations, :count, :adapter, :connection_id, :query_cost, :kind, :confidence
 
     # Keep the legacy keyword construction API while adding optional measurements.
     def initialize(queries:, count:, caller_locations: nil, raw_caller_strings: nil, adapter: nil, # rubocop:disable Metrics/ParameterLists
-                   connection_id: nil, issue_id: nil, fingerprint: nil, query_cost: nil)
+                   connection_id: nil, issue_id: nil, fingerprint: nil, query_cost: nil, kind: nil, confidence: nil)
+      @kind = (kind || :generic_repetition).to_sym
+      @confidence = (confidence || :unknown).to_sym
       @query_cost = query_cost
       # Compute the legacy broad ignore key before redaction/truncation.
       @fingerprint = fingerprint || Digest::SHA256.hexdigest(
@@ -27,6 +29,10 @@ module AndOne
       @adapter = adapter
       @connection_id = connection_id
       @issue_id = issue_id
+    end
+
+    def classification_label
+      "#{kind.to_s.tr("_", " ").sub("n plus one", "N+1")} (#{confidence})"
     end
 
     # Returns the SQL of the first query as the representative example

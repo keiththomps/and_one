@@ -69,6 +69,10 @@ module AndOne
        "Coverage: #{cost.occurrences}/#{entry.occurrences} occurrences"].map { |text| h(text) }.join("<br>")
     end
 
+    def classification_cell(detection)
+      h(detection.classification_label)
+    end
+
     def render_html(entries)
       rows = if entries.empty?
                <<~HTML
@@ -96,7 +100,7 @@ module AndOne
                  <<~HTML
                    <tr>
                      <td>#{i + 1}</td>
-                     <td><code>#{h(det.table_name || "unknown")}</code></td>
+                     <td><code>#{h(det.table_name || "unknown")}</code><div>#{classification_cell(det)}</div></td>
                      <td>#{entry.occurrences}</td>
                      <td>#{cost_cell(entry)}</td>
                      <td><code class="sql">#{h(truncate(det.sample_query, 200))}</code></td>

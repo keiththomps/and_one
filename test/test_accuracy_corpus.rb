@@ -34,6 +34,7 @@ class TestAccuracyCorpus < Minitest::Test
         assert_equal scenario[:physical], before, diagnostic
       else
         refute_empty detections, diagnostic
+        assert_equal [scenario[:kind]], detections.map(&:kind).uniq, diagnostic if scenario[:kind]
         suggestions = detections.map { |detection| AndOne::AssociationResolver.resolve(detection, detection.raw_caller_strings) }
         refute_includes suggestions, nil, diagnostic
         assert_equal scenario[:observed] == :candidate, suggestions.all?(&:actionable?), diagnostic
@@ -59,6 +60,7 @@ class TestAccuracyCorpus < Minitest::Test
     assert child_events.all? { |payload| !payload[:binds].empty? }, "expected real #{connection.adapter_name} bind metadata"
     assert_equal 1, detections.size
     assert_equal 3, detections.first.count
+    assert_equal :suspected_association_n_plus_one, detections.first.kind
     assert_equal ActiveRecord::Base.connection_db_config.adapter, detections.first.adapter
     assert_empty(AndOne.scan { AccuracyCorpus.records(CorpusOwner.preload(:items), :items) })
   end

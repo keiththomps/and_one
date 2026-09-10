@@ -2,6 +2,7 @@
 
 require_relative "read_statement"
 require_relative "connection_context"
+require_relative "repetition_evidence"
 
 module AndOne
   # Counts query shapes within one execution context. SQL samples, callers and
@@ -12,7 +13,7 @@ module AndOne
       %r{active_record/validations/uniqueness}
     ].freeze
     SAMPLE_LIMIT = 5
-    Group = Struct.new(:total, :queries, :callers, :metadata, :ignored, :query_cost, :fingerprint)
+    Group = Struct.new(:total, :queries, :callers, :metadata, :ignored, :query_cost, :fingerprint, :evidence)
 
     attr_reader :detections
 
@@ -21,6 +22,7 @@ module AndOne
       @ignore_queries = ignore_queries
       @min_n_queries = min_n_queries
       @ignore_list = ignore_list
+      @signature_key = SecureRandom.random_bytes(32)
       @groups = {}
       @detections = []
     end
@@ -40,7 +42,7 @@ module AndOne
       metadata = ConnectionContext.metadata(payload)
       return unless ReadStatement.eligible?(sql, adapter: metadata[:connection_adapter])
 
-      record_query(sql, metadata, duration_ms)
+      record_query(sql, metadata, duration_ms, payload)
     end
 
     private
@@ -49,6 +51,7 @@ module AndOne
       @detections = @groups.values.filter_map do |group|
         next if group.total < @min_n_queries || group.ignored
 
+        kind, confidence = group.evidence.classification
         Detection.new(
           queries: group.queries,
           caller_locations: group.callers,
@@ -56,16 +59,17 @@ module AndOne
           count: group.total,
           adapter: group.metadata[:connection_adapter],
           connection_id: group.metadata[:connection_id],
-          query_cost: group.query_cost
+          query_cost: group.query_cost, kind: kind, confidence: confidence
         )
       end
     end
 
-    def record_query(sql, metadata, duration_ms)
+    def record_query(sql, metadata, duration_ms, payload)
       locations = caller_locations
       key = [location_fingerprint(locations), metadata[:connection_id],
              Digest::SHA256.hexdigest(Fingerprint.generate(sql, adapter: metadata[:connection_adapter]))]
       group = @groups[key] ||= new_group(locations, metadata, sql)
+      group.evidence.record(sql, payload, metadata[:connection_adapter], @signature_key)
       group.total += 1
       group.query_cost.record(duration_ms)
       # Query ignore rules historically inspect ALL occurrences. Evaluate before
@@ -80,7 +84,7 @@ module AndOne
       ignored ||= @ignore_list&.callers_ignored?(locations.map(&:to_s))
       sample = Detection.new(queries: [sql], count: 1, adapter: metadata[:connection_adapter])
       Group.new(total: 0, queries: [], callers: CapturePolicy.frames(locations), metadata: metadata,
-                ignored: ignored, query_cost: QueryCost.new, fingerprint: sample.fingerprint)
+                ignored: ignored, query_cost: QueryCost.new, fingerprint: sample.fingerprint, evidence: RepetitionEvidence.new)
     end
 
     def location_fingerprint(locations)

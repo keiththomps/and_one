@@ -63,6 +63,8 @@ module AndOne
         issue_id: detection.issue_id,
         connection_id: detection.connection_id,
         adapter: detection.adapter,
+        kind: detection.kind.to_s,
+        confidence: detection.confidence.to_s,
         query_count: detection.count,
         query_cost: detection.query_cost&.to_h,
         sample_query: detection.sample_query,

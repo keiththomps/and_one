@@ -9,6 +9,13 @@ module AndOne
     module_function
 
     def resolve(detection, cleaned_backtrace)
+      if detection.kind == :duplicate_identical_read
+        return Suggestion.new(target_model: nil, parent_model: nil, association_name: nil,
+                              operation: :unknown, origin_frame: cleaned_backtrace&.first,
+                              fix_hint: "Identical reads repeated; inspect redundant lookups or request-local reuse. " \
+                                        "Verify freshness requirements before caching.")
+      end
+
       evidence = QueryEvidence.new(detection.sample_query, adapter: detection.adapter)
       target = model_for_table(detection.table_name)
       return nil unless target
@@ -73,6 +80,8 @@ module AndOne
       when :count
         "For COUNT, consider a counter cache or grouped counts; use .size only on an already loaded association " \
         "when loading all records is acceptable. includes alone does not eliminate .count queries."
+      when :aggregate
+        "For aggregates, consider grouped/batched calculations; verify equivalent scopes, empty-set and NULL semantics."
       when :exists
         "For existence checks, consider batching matching keys; verify equivalent scope and NULL semantics."
       when :scalar
