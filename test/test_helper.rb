@@ -68,6 +68,8 @@ module AndOneTestHelper
   def setup
     super
     AndOne.enabled = true
+    AndOne.capture_mode = :redacted
+    AndOne.dashboard_access_guard = nil
     AndOne.raise_on_detect = false
     AndOne.allow_stack_paths = []
     AndOne.ignore_queries = []

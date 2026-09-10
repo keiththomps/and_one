@@ -29,10 +29,21 @@ module AndOne
     private
 
     def serve_dashboard(env)
+      return [403, { "content-type" => "text/plain", "cache-control" => "no-store" }, ["Forbidden"]] unless allowed?(env)
+
       entries = sorted_entries(AndOne.aggregate.detections, env["QUERY_STRING"])
 
       html = render_html(entries)
-      [200, { "content-type" => "text/html; charset=utf-8" }, [html]]
+      [200, { "content-type" => "text/html; charset=utf-8", "cache-control" => "no-store" }, [html]]
+    end
+
+    def allowed?(env)
+      guard = AndOne.dashboard_access_guard
+      return !!guard.call(env) if guard
+
+      %w[127.0.0.1 ::1].include?(env["REMOTE_ADDR"])
+    rescue StandardError
+      false
     end
 
     def sorted_entries(entries, query)

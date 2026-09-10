@@ -220,7 +220,7 @@ With a Content-Security-Policy header (including report-only) or CSP meta tag, t
 
 ### Dashboard
 
-Browse `/__and_one` in development for a full overview of every unique N+1 detected in the current server session. The dashboard shows the query, origin, fix location, and suggested `.includes()` call for each detection.
+Browse `/__and_one` in development for a full overview of every unique N+1 detected in the current server session. The dashboard shows the query, origin, fix location, and suggested `.includes()` call for each detection. Access defaults to loopback peers (`127.0.0.1` or `::1`); missing/remote peer addresses receive 403. See [capture privacy and dashboard access](#capture-privacy-and-dashboard-access) for shared-development setups.
 
 Both features work together: the toast gives you immediate feedback on the page you're looking at, and the dashboard link takes you to the full picture.
 
@@ -307,6 +307,30 @@ Captures are fiber-local; nested captures are inclusive for the parent and indep
 - **Development**: Logs N+1 warnings to Rails logger and stderr
 - **Test**: Raises `AndOne::NPlus1Error` so N+1s fail your test suite
 - **Production**: Disabled by default if loaded; the recommended Gemfile group excludes it
+
+## Capture privacy and dashboard access
+
+The default `AndOne.capture_mode = :redacted` replaces SQL string/numeric/boolean literals, bind placeholders, comments (including hints), and opaque/unterminated tokens with `?` **before retaining samples**. Bind values and lazy bind callbacks are not retained or evaluated. This affects returned detections, callbacks, exceptions, text/JSON output, logs, aggregate storage, and the dashboard—not SQL execution. Fingerprints and query-ignore matching use original SQL before redaction, including occurrences beyond the sample limit. Caller/path/gem ignores inspect the original stack before capture limits.
+
+Each detection retains at most **5 SQL samples × 2,048 bytes** and **20 frames × 256 bytes** in either mode. Frames prioritize application code while preserving stack order. Default frames remove absolute application prefixes; external paths become portable suffixes/filenames. `raw_caller_strings` now means policy-limited strings before optional backtrace cleaning; `caller_locations` contains bounded snapshots with `path`, `absolute_path`, `lineno`, and `to_s` accessors.
+
+Redaction is lexical, not complete anonymization: schema/table/column identifiers and application filenames/method names remain visible. Adapter-specific quoting matters; SQLite/unknown-adapter ambiguous double-quoted values are conservatively masked, which can hide unqualified column names too. Backslashes in quoted tokens conservatively mask the rest of the sample because session-dependent escaping rules can be ambiguous. Avoid embedding secrets in identifiers or using unsupported vendor literal syntax. Do not expose findings publicly or enable production capture on the assumption that redaction removes all sensitive information.
+
+For temporary local debugging only, opt in explicitly **before scanning**:
+
+```ruby
+AndOne.capture_mode = :raw # WARNING: SQL literals and absolute paths can contain credentials/PII
+```
+
+Raw mode remains bounded and does not capture binds. Changing modes cannot revoke already returned detections, callbacks, or written logs. Existing aggregate samples are sanitized when read under redacted mode; old logs/backups must be removed separately. Newly created aggregate, lock, and log files use mode `0600` (aggregate directories use `0700`); existing files' permissions are not automatically changed.
+
+The dashboard returns `Cache-Control: no-store`. It trusts only the direct Rack `REMOTE_ADDR`, not forwarding headers. A local reverse proxy can make remote clients appear local: secure the proxy or supply an explicit guard. For shared development, integrate with trusted authentication middleware **before** DevUI:
+
+```ruby
+AndOne.dashboard_access_guard = ->(env) { env["my_app.authenticated_developer"] == true }
+```
+
+A configured callable replaces the loopback check; false/nil or an exception denies access. Only use server-verified identity, not an arbitrary client header. This is an access hook, not an authentication framework.
 
 ## Configuration
 

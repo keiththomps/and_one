@@ -136,7 +136,7 @@ class TestQueryCost < Minitest::Test
       "queries" => %w[many frequent expensive historical],
       "occurrences" => %w[frequent expensive historical many],
       "invalid" => %w[expensive many frequent historical] }.each do |sort, expected|
-      html = ui.call("PATH_INFO" => "/__and_one", "QUERY_STRING" => "sort=#{sort}")[2].first
+      html = ui.call("PATH_INFO" => "/__and_one", "REMOTE_ADDR" => "127.0.0.1", "QUERY_STRING" => "sort=#{sort}")[2].first
       assert_equal expected, html.scan(/issue_id: (\w+)/).flatten
       assert_includes html, "300.000 ms observed"
       assert_includes html, "Unknown (historical)"

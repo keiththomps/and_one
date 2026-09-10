@@ -21,7 +21,7 @@ class TestDevUI < Minitest::Test
     app = ->(_env) { [200, {}, ["app"]] }
     dev_ui = AndOne::DevUI.new(app)
 
-    status, headers, body = dev_ui.call("PATH_INFO" => "/__and_one")
+    status, headers, body = dev_ui.call("PATH_INFO" => "/__and_one", "REMOTE_ADDR" => "127.0.0.1")
 
     assert_equal 200, status
     assert_equal "text/html; charset=utf-8", headers["content-type"]
@@ -47,7 +47,7 @@ class TestDevUI < Minitest::Test
     app = ->(_env) { [200, {}, ["app"]] }
     dev_ui = AndOne::DevUI.new(app)
 
-    _status, _headers, body = dev_ui.call("PATH_INFO" => "/__and_one")
+    _status, _headers, body = dev_ui.call("PATH_INFO" => "/__and_one", "REMOTE_ADDR" => "127.0.0.1")
 
     html = body.first
     assert_includes html, "comments"
@@ -58,7 +58,7 @@ class TestDevUI < Minitest::Test
     app = ->(_env) { [200, {}, ["app"]] }
     dev_ui = AndOne::DevUI.new(app)
 
-    _status, _headers, body = dev_ui.call("PATH_INFO" => "/__and_one")
+    _status, _headers, body = dev_ui.call("PATH_INFO" => "/__and_one", "REMOTE_ADDR" => "127.0.0.1")
 
     html = body.first
     assert_includes html, "No N+1 queries detected yet"

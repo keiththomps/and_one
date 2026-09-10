@@ -71,7 +71,7 @@ class TestIssueIdentity < Minitest::Test
     assert_equal([first.issue_id, other.issue_id], json.map { |entry| entry[:issue_id] })
     assert_equal [first.fingerprint], json.map { |entry| entry[:fingerprint] }.uniq
     text = AndOne::Formatter.new.format([first, other])
-    html = AndOne::DevUI.new(nil).call("PATH_INFO" => "/__and_one").last.join
+    html = AndOne::DevUI.new(nil).call("PATH_INFO" => "/__and_one", "REMOTE_ADDR" => "127.0.0.1").last.join
     [text, html, AndOne.aggregate.summary].each do |output|
       [first, other].each do |finding|
         assert_includes output, finding.issue_id

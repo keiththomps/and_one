@@ -47,6 +47,13 @@ module AndOne
       @rules.any? { |rule| rule.type == :query && sql.include?(rule.pattern) }
     end
 
+    def callers_ignored?(frames)
+      @rules.any? do |rule|
+        (rule.type == :gem && matches_gem?(rule.pattern, frames)) ||
+          (rule.type == :path && matches_path?(rule.pattern, frames))
+      end
+    end
+
     private
 
     def parse
