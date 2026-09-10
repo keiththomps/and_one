@@ -4,26 +4,100 @@ on:
   push:
     branches:
       - main
-
   pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: Ruby ${{ matrix.ruby }}
+    name: Ruby ${{ matrix.ruby }} / Rails ${{ matrix.rails }} / SQLite
     strategy:
+      fail-fast: false
       matrix:
-        ruby:
-          - '4.0.1'
-
+        include:
+          - ruby: '3.2'
+            rails: '7.0.0'
+          - ruby: '3.3'
+            rails: '7.2.0'
+          - ruby: '4.0'
+            rails: '8.1.0'
+    env:
+      BUNDLE_GEMFILE: gemfiles/compatibility.gemfile
+      RAILS_VERSION: ${{ matrix.rails }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-      - name: Run the default task
-        run: bundle exec rake
+          cache-version: ${{ matrix.rails }}
+      - run: bundle exec rake
+      - run: git diff --exit-code -- Gemfile.lock
+
+  adapters:
+    runs-on: ubuntu-latest
+    name: Rails ${{ matrix.rails }} / ${{ matrix.db }} integration
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ruby: '3.2'
+            rails: '7.0.0'
+            db: postgresql
+          - ruby: '3.2'
+            rails: '7.0.0'
+            db: mysql2
+          - ruby: '4.0'
+            rails: '8.1.0'
+            db: postgresql
+          - ruby: '4.0'
+            rails: '8.1.0'
+            db: mysql2
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: and_one
+          POSTGRES_PASSWORD: and_one
+          POSTGRES_DB: and_one_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U and_one -d and_one_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_USER: and_one
+          MYSQL_PASSWORD: and_one
+          MYSQL_DATABASE: and_one_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      BUNDLE_GEMFILE: gemfiles/compatibility.gemfile
+      RAILS_VERSION: ${{ matrix.rails }}
+      DB: ${{ matrix.db }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install -y libpq-dev default-libmysqlclient-dev
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+          cache-version: ${{ matrix.rails }}-${{ matrix.db }}
+      - name: Run portable corpus and prepared-query checks
+        run: |
+          if [ "$DB" = postgresql ]; then
+            export DATABASE_URL='postgresql://and_one:and_one@127.0.0.1:5432/and_one_test?prepared_statements=true'
+          else
+            export DATABASE_URL='mysql2://and_one:and_one@127.0.0.1:3306/and_one_test?prepared_statements=true'
+          fi
+          bundle exec ruby -Itest test/test_accuracy_corpus.rb
+      - run: git diff --exit-code -- Gemfile.lock
