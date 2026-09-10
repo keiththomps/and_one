@@ -8,7 +8,9 @@ gem "irb"
 # Rails 7's JSON encoder passes quirks_mode, removed in JSON 3.
 gem "json", "< 3" if ENV.fetch("RAILS_VERSION", "8.1.0").start_with?("7.")
 gem "minitest", "~> 5.16"
-gem "mysql2", "~> 0.5" if ENV["DB"] == "mysql2"
+# 0.5.7 segfaults on empty prepared results (upstream mysql2#1426/#1427).
+# Keep prepared-query coverage enabled; remove the exclusion once a fixed release is verified.
+gem "mysql2", "~> 0.5", "!= 0.5.7" if ENV["DB"] == "mysql2"
 gem "pg", "~> 1.5" if ENV["DB"] == "postgresql"
 gem "rails", "~> #{ENV.fetch("RAILS_VERSION", "8.1.0")}"
 gem "rake", "~> 13.0"

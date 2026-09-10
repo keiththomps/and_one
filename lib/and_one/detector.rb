@@ -12,7 +12,7 @@ module AndOne
       %r{active_record/validations/uniqueness}
     ].freeze
     SAMPLE_LIMIT = 5
-    Group = Struct.new(:total, :queries, :callers, :metadata, :ignored)
+    Group = Struct.new(:total, :queries, :callers, :metadata, :ignored, :query_cost)
 
     attr_reader :detections
 
@@ -30,7 +30,9 @@ module AndOne
       @detections
     end
 
-    def record(payload)
+    def record(payload = nil, duration_ms: nil, **attributes)
+      # Preserve direct record(sql: ...) callers as well as notification hashes.
+      payload ||= attributes
       sql = payload[:sql]
       return if payload[:name] == "SCHEMA" || payload[:cached] || payload[:async]
       return if @ignore_queries.any? { |pattern| pattern.match?(sql) }
@@ -38,7 +40,7 @@ module AndOne
       metadata = ConnectionContext.metadata(payload)
       return unless ReadStatement.eligible?(sql, adapter: metadata[:connection_adapter])
 
-      record_query(sql, metadata)
+      record_query(sql, metadata, duration_ms)
     end
 
     private
@@ -52,17 +54,19 @@ module AndOne
           caller_locations: group.callers,
           count: group.total,
           adapter: group.metadata[:connection_adapter],
-          connection_id: group.metadata[:connection_id]
+          connection_id: group.metadata[:connection_id],
+          query_cost: group.query_cost
         )
       end
     end
 
-    def record_query(sql, metadata)
+    def record_query(sql, metadata, duration_ms)
       locations = caller_locations
       key = [location_fingerprint(locations), metadata[:connection_id],
              Fingerprint.generate(sql, adapter: metadata[:connection_adapter])]
       group = @groups[key] ||= new_group(locations, metadata)
       group.total += 1
+      group.query_cost.record(duration_ms)
       # Query ignore rules historically inspect ALL occurrences. Evaluate before
       # dropping samples so a late literal match still suppresses the whole group.
       group.ignored ||= @ignore_list&.query_ignored?(sql)
@@ -71,7 +75,7 @@ module AndOne
 
     def new_group(locations, metadata)
       ignored = locations.any? { |frame| @allow_stack_paths.any? { |pattern| frame.to_s.match?(pattern) } }
-      Group.new(total: 0, queries: [], callers: locations, metadata: metadata, ignored: ignored)
+      Group.new(total: 0, queries: [], callers: locations, metadata: metadata, ignored: ignored, query_cost: QueryCost.new)
     end
 
     def location_fingerprint(locations)

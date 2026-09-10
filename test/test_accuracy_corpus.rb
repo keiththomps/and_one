@@ -63,6 +63,31 @@ class TestAccuracyCorpus < Minitest::Test
     assert_empty(AndOne.scan { AccuracyCorpus.records(CorpusOwner.preload(:items), :items) })
   end
 
+  def test_empty_prepared_results_remain_readable_and_are_measured
+    connection = ActiveRecord::Base.connection
+    assert connection.prepared_statements, "#{connection.adapter_name} must exercise prepared queries"
+    # mysql2 0.5.7 frees empty prepared-result metadata before Rails reads fields.
+    # Do not skip empty results or disable prepared statements to hide that crash.
+    events = []
+    subscriber = ->(*args) { events << args.last unless args.last[:name] == "SCHEMA" }
+    results = []
+    detections = nil
+    ActiveRecord::Base.uncached do
+      ActiveSupport::Notifications.subscribed(subscriber, "sql.active_record") do
+        detections = AndOne.scan do
+          3.times { results << CorpusItem.where(owner_code: "missing-owner").pluck(:id) }
+        end
+      end
+    end
+
+    assert_equal [[], [], []], results
+    assert_equal 3, events.size
+    assert events.all? { |payload| !payload[:binds].empty? }, "expected bound empty-result queries"
+    assert_equal 1, detections.size
+    assert_equal 3, detections.first.count
+    assert_equal 3, detections.first.query_cost.timed_query_count
+  end
+
   private
 
   def verify_recommendation(scenario, suggestions, baseline, before, diagnostic)

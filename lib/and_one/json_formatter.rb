@@ -37,6 +37,18 @@ module AndOne
       detections.map { |d| format_detection(d) }
     end
 
+    # Session rollups, including repeats that are deduplicated from log output.
+    def format_aggregate(entries)
+      JSON.generate(entries.values.map do |entry|
+        format_detection(entry.detection).merge(
+          occurrences: entry.occurrences,
+          first_seen_at: entry.first_seen_at&.iso8601,
+          last_seen_at: entry.last_seen_at&.iso8601,
+          cumulative_query_cost: entry.query_cost&.to_h
+        )
+      end)
+    end
+
     private
 
     def format_detection(detection)
@@ -52,6 +64,7 @@ module AndOne
         connection_id: detection.connection_id,
         adapter: detection.adapter,
         query_count: detection.count,
+        query_cost: detection.query_cost&.to_h,
         sample_query: detection.sample_query,
         origin: format_frame(detection.origin_frame),
         fix_location: format_frame(detection.fix_location),

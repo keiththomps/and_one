@@ -9,10 +9,10 @@ module AndOne
       @mutex.synchronize do
         return @subscriber if @subscriber
 
-        @subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
+        @subscriber = ActiveSupport::Notifications.monotonic_subscribe("sql.active_record") do |_, started, finished, _, payload|
           ExecutionContext[:and_one_query_captures]&.each { |capture| capture.record(payload) }
           detector = ExecutionContext.active_detector
-          detector&.record(payload)
+          detector&.record(payload, duration_ms: (finished - started) * 1000.0)
         end
       end
     end
