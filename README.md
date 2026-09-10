@@ -210,7 +210,11 @@ AndOne.dev_toast_position = :bottom_right  # :top_right (default), :top_left, :b
 AndOne.dev_toast = false                   # disable entirely
 ```
 
-The toast only appears on HTML responses with a 200 status, so it won't interfere with API endpoints, redirects, or error pages.
+The toast only transforms complete `text/html` responses with status 200 and a Rack `to_ary` body (including ordinary Rails renders). HEAD, API, redirect, error, encoded/compressed, streaming, file/download, and partial responses are left untouched. Place AndOne inside compression middleware to inject before compression. Transformed responses lose Content-Length and validators/digests; untouched content keeps its metadata. Rack bodies own cleanup in `to_ary`, including on conversion errors; AndOne does not enumerate arbitrary bodies or close converted bodies a second time.
+
+With a Content-Security-Policy header (including report-only) or CSP meta tag, the toast becomes an unstyled, script-free native `<details>` notice with a dashboard link. It does not auto-dismiss or use the position setting, and never requires `unsafe-inline` or changes your policy.
+
+**SQL coverage:** scanning ends when the application returns its Rack response, before lazy body enumeration. Queries executed by streaming/lazy bodies are not captured by this middleware; use an explicit scan within that workload if needed.
 
 ### Dashboard
 

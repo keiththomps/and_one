@@ -25,12 +25,29 @@ module AndOne
 
     # Injects toast HTML/JS/CSS before </body> in an HTML response.
     # Returns the modified body string, or the original if not injectable.
-    def inject(body_string, detections)
+    def inject(body_string, detections, script_free: false)
       return body_string if detections.nil? || detections.empty?
-      return body_string unless body_string.include?("</body>")
+      return body_string unless body_string.match?(%r{</body\s*>}i)
 
-      toast_html = render_toast(detections)
-      body_string.sub("</body>", "#{toast_html}\n</body>")
+      # A meta-delivered policy is just as binding as a response header.
+      script_free ||= body_string.match?(/<meta\b[^>]*content-security-policy/i)
+      toast_html = script_free ? render_fallback(detections) : render_toast(detections)
+      body_string.sub(%r{</body\s*>}i) { |closing| "#{toast_html}\n#{closing}" }
+    end
+
+    def render_fallback(detections)
+      summaries = detections.first(5).map do |detection|
+        "<li>#{detection.count}x <code>#{escape(detection.table_name || "unknown")}</code></li>"
+      end
+      <<~HTML
+        <aside id="and-one-toast" role="status" aria-live="polite">
+          <details>
+            <summary>AndOne: #{detections.size} N+1 findings detected</summary>
+            <ul>#{summaries.join}</ul>
+            <a href="#{DevUI::MOUNT_PATH}">View Dashboard →</a>
+          </details>
+        </aside>
+      HTML
     end
 
     def render_toast(detections)
