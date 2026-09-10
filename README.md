@@ -50,6 +50,8 @@ That's it. AndOne automatically activates in development and test environments v
 
 AndOne requires Ruby 3.2+ and ActiveRecord/ActiveSupport/Railties 7.0+ (choose versions compatible with your Ruby). Rails applications get automatic request/job integration. Outside a Rails application, “plain Ruby” support means **ActiveRecord SQL instrumentation**, not arbitrary database clients or other ORMs such as Sequel. Railties remains a runtime dependency; RSpec is optional and only needed for `and_one/rspec`. No public RBS signatures are currently shipped.
 
+CI exercises Ruby/Rails 3.2/7.0, 3.3/7.2, and 4.0/8.1 on SQLite, plus the oldest/current boundaries on PostgreSQL 16 and MySQL 8.0. A 17-scenario labeled corpus checks recommendation accuracy, known limitations, and before/after result equivalence and physical query counts. See [the support matrix and local reproduction commands](docs/compatibility.md).
+
 A standalone script can use:
 
 ```ruby

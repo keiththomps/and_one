@@ -2,6 +2,7 @@
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
+require "logger" # Rails 7.0 expects Logger to be loaded before ActiveSupport.
 require "active_record"
 require "active_support"
 require "and_one"
@@ -9,13 +10,18 @@ require "minitest/autorun"
 require "tmpdir"
 require "fileutils"
 
-# Set up an in-memory SQLite database for testing
+# Service-backed jobs run the portable integration corpus only. DATABASE_URL
+# must point at a disposable test database: schema setup is destructive.
 ActiveRecord::Base.establish_connection(
-  adapter: "sqlite3",
-  database: ":memory:"
+  ENV.fetch("DATABASE_URL") { { adapter: "sqlite3", database: ":memory:", prepared_statements: true } }
 )
 
 ActiveRecord::Schema.define do
+  # Drop dependents first so service databases can be reused for another run.
+  drop_table :comments, if_exists: true
+  drop_table :posts, if_exists: true
+  drop_table :authors, if_exists: true
+
   create_table :authors, force: true do |t|
     t.string :name
   end

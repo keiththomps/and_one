@@ -79,7 +79,9 @@ class TestThreadSafety < Minitest::Test
     errors = []
     threads = count.times.map do |i|
       Thread.new(i) do |idx|
-        block.call(idx, errors)
+        # Rails 7 keeps implicitly leased connections until explicitly released;
+        # return each worker's lease even when more workers than pool slots run.
+        ActiveRecord::Base.connection_pool.with_connection { block.call(idx, errors) }
       rescue StandardError => e
         errors << "Thread #{idx}: #{e.class}: #{e.message}\n#{e.backtrace.first(3).join("\n")}"
       end
