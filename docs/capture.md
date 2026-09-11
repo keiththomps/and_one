@@ -55,10 +55,11 @@ location/ignore semantics, but later occurrences do not replace retained stacks
 or metadata. No bind objects or connection objects are retained.
 
 This bounds repeated-occurrence retention, **not total scan memory**: distinct
-shapes/stacks/connections still create groups, and individual SQL strings and
-stack depth are not byte-capped. SQL parsing and stack fingerprinting still cost
-work per eligible event. Global storage retention and SQL redaction are separate
-concerns; do not treat these samples as sanitized SQL.
+shapes/stacks/connections still create groups. Retained samples are redacted by
+default and capped at 2,048 bytes each; retained stacks hold at most 20 frames of
+256 bytes each. Incoming SQL size and stack depth are not capped before parsing
+and fingerprinting, which still cost work per eligible event. Redaction is not
+complete anonymization; see [capture privacy](usage.md#capture-privacy-and-dashboard-access).
 
 Configured `ignore_queries` regexes continue excluding individual events before
 counting. Ignore-file `query:` rules instead suppress a whole repeated group if

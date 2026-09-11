@@ -98,9 +98,11 @@ high-throughput database. Atomic rename prevents partial documents; there is no
 fsync/power-loss durability guarantee. New aggregate/lock/log files use 0600;
 new session/store directories use 0700. Existing permissions are not changed.
 
-**SQL samples are still raw and may contain secrets.** Size limits and file
-permissions are not redaction or dashboard authentication; that remains #10.
-Do not expose this storage or dashboard to untrusted users.
+**SQL samples are redacted by default, but are not completely anonymous.**
+Identifiers and application filenames can remain visible; opt-in raw capture can
+retain secrets. Historical samples are sanitized when read in redacted mode,
+but old logs/backups are not revoked. Do not expose findings to untrusted users.
+See [capture privacy and dashboard access](usage.md#capture-privacy-and-dashboard-access).
 
 By default, filesystem errors, corrupt/invalid JSON, oversized documents, and
 failed writes produce a stderr diagnostic at most once per minute per Aggregate
