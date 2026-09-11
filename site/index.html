@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f2eb">
+  <meta name="description" content="Catch repeated ActiveRecord queries before they become a habit. AndOne brings N+1 investigation, measured query costs, and regression tests to Rails. No external service required.">
+  <meta property="og:title" content="AndOne — Make every query count.">
+  <meta property="og:description" content="Repeated-query detection for Rails. Useful suggestions, measured impact, and a tighter defense in your test suite.">
+  <meta property="og:type" content="website">
+  <title>AndOne — Make every query count.</title>
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./assets/style.css">
+  <script src="./assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header wrap">
+    <a class="brand" href="./" aria-label="AndOne home"><img src="./assets/icon.svg" width="34" height="34" alt="">AndOne<span class="brand-dot">.</span></a>
+    <nav aria-label="Main navigation">
+      <a href="#game-plan">How it works</a>
+      <a href="https://github.com/keiththomps/and_one#readme">Docs</a>
+      <a class="nav-github" href="https://github.com/keiththomps/and_one">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Open source. Built for Rails.</p>
+        <h1 id="hero-title">Make every<br>query <span class="accent-word">count<svg viewBox="0 0 370 25" aria-hidden="true"><path d="M5 17 Q170 -2 360 10 M40 24 Q200 7 325 18"/></svg></span>.</h1>
+        <p class="hero-description">Your app has enough going on.<br>Repeated queries shouldn’t be part of the game.</p>
+        <p class="hero-detail">AndOne spots repeated ActiveRecord reads, shows their measured cost, and helps you investigate the fix. Right where you work.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#install">Add to your lineup <span aria-hidden="true">↗</span></a>
+          <a class="text-link" href="#game-plan">See the game plan <span aria-hidden="true">↓</span></a>
+        </div>
+        <p class="hero-note">One gem. No external service. MIT licensed.</p>
+      </div>
+
+      <div class="hero-visual">
+        <div class="court" aria-hidden="true"><div class="court-circle"></div><div class="court-key"></div></div>
+        <div class="finding-window">
+          <div class="window-bar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>development / example finding</span><span class="live-label">LIVE</span></div>
+          <div class="finding-body">
+            <div class="finding-heading"><img src="./assets/icon.svg" width="36" height="36" alt=""><div><strong>And One!</strong><span>1 repeated-query finding</span></div><span class="finding-count">9×</span></div>
+            <div class="finding-label">SUSPECTED ASSOCIATION N+1 <span>CANDIDATE</span></div>
+            <pre class="query-code"><code><span class="syntax-purple">SELECT</span> <span class="syntax-yellow">"comments"</span>.*
+<span class="syntax-purple">FROM</span> <span class="syntax-yellow">"comments"</span>
+<span class="syntax-purple">WHERE</span> <span class="syntax-yellow">"comments"."post_id"</span> = <span class="syntax-orange">?</span></code></pre>
+            <div class="query-metrics"><div><strong>9</strong><span>executed reads</span></div><div><strong>12.4<span>ms</span></strong><span>observed SQL time</span></div></div>
+            <div class="origin"><span>TRIGGERED AT</span><code>app/views/posts/index.html.erb:5</code></div>
+            <div class="suggestion"><span class="suggestion-arrow" aria-hidden="true">↳</span><p>If this is <code>Post#comments</code> record loading, try <code>.preload(:comments)</code> on the parent query. Verify scopes and results.</p></div>
+          </div>
+          <div class="window-footer"><span class="status-dot" aria-hidden="true"></span> SQL samples redacted by default</div>
+        </div>
+        <div class="visual-caption"><span aria-hidden="true">↖</span> Less guesswork. A better next move.</div>
+      </div>
+    </section>
+
+    <div class="compat-strip"><div class="wrap compat-inner"><span class="eyebrow">Plays on your court</span><p>Rails 7+ <span>/</span> Ruby 3.2+ <span>/</span> ActiveJob & Sidekiq <span>/</span> Minitest & RSpec</p><a href="https://github.com/keiththomps/and_one/blob/main/docs/compatibility.md">Tested combinations <span aria-hidden="true">↗</span></a></div></div>
+
+    <section class="section wrap" id="game-plan" aria-labelledby="plan-title">
+      <div class="section-heading"><div><p class="eyebrow">01 / The game plan</p><h2 id="plan-title">Find the repeat.<br>Make the right play.</h2></div><p>No separate service to run. No dashboard account to create. Just feedback in your Rails development loop.</p></div>
+      <div class="feature-grid">
+        <article class="feature-card"><div class="feature-top"><span class="step">01</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M9 13h30M9 24h30M9 35h19"/><circle cx="35" cy="35" r="7"/><path d="m40 40 5 5"/></svg></div><h3>Catch the pattern.</h3><p>Automatic request and job scans group repeated reads by SQL shape and call stack. Development notices bring findings to the page you’re already on.</p><span class="feature-tag">In your existing workflow</span></article>
+        <article class="feature-card"><div class="feature-top"><span class="step">02</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 40V26h7v14M21 40V17h7v23M34 40V7h7v33M5 40h39"/></svg></div><h3>See what matters.</h3><p>Rank findings by observed SQL time, occurrences, or executed query count in the local dashboard. Investigate measured work—not invented savings.</p><span class="feature-tag">Evidence over estimates</span></article>
+        <article class="feature-card"><div class="feature-top"><span class="step">03</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="m24 5 16 6v13c0 10-16 19-16 19S8 34 8 24V11Z"/><path d="m16 24 6 6 11-13"/></svg></div><h3>Keep it from returning.</h3><p>Fail tests on repeated-query findings. Add explicit query budgets and input-growth assertions to protect the behavior you actually care about.</p><span class="feature-tag">A stronger test defense</span></article>
+      </div>
+    </section>
+
+    <section class="test-section" aria-labelledby="test-title"><div class="wrap test-layout">
+      <div class="test-copy"><p class="eyebrow">02 / Play defense</p><h2 id="test-title">Ship the feature.<br>Not the extra queries.</h2><p>Go beyond “it returns the right records.” Check the database work it takes to get them.</p><ul class="check-list"><li>Repeated-query matchers for Minitest and RSpec</li><li>Inclusive budgets for executed SQL notifications</li><li>Growth checks as your input size increases</li></ul><a class="text-link" href="https://github.com/keiththomps/and_one/blob/main/docs/usage.md#test-matchers">Explore the test helpers <span aria-hidden="true">↗</span></a></div>
+      <div class="test-code"><div class="code-title"><span class="file-icon" aria-hidden="true">◇</span> spec/models/post_spec.rb <span>RSpec</span></div><pre><code><span class="syntax-muted">require</span> <span class="syntax-yellow">"and_one/rspec"</span>
+
+RSpec.describe Post <span class="syntax-purple">do</span>
+  it <span class="syntax-yellow">"loads comments without repeated reads"</span> <span class="syntax-purple">do</span>
+    expect {
+      Post.preload(<span class="syntax-orange">:comments</span>).each <span class="syntax-purple">do</span> |post|
+        post.comments.to_a
+      <span class="syntax-purple">end</span>
+    }.not_to cause_n_plus_one
+  <span class="syntax-purple">end</span>
+<span class="syntax-purple">end</span></code></pre><div class="code-footnote"><span aria-hidden="true">↳</span> Prepare representative data before the expectation.</div></div>
+    </div></section>
+
+    <section class="section wrap principles" aria-labelledby="principles-title">
+      <div class="principles-intro"><p class="eyebrow">03 / No overpromising</p><h2 id="principles-title">An honest call.<br>Not a magic fix.</h2><p>SQL can show repetition. It can’t prove which Ruby association you meant to load. AndOne keeps that distinction visible.</p><a class="text-link" href="https://github.com/keiththomps/and_one#finding-classification">Understand finding kinds <span aria-hidden="true">↗</span></a></div>
+      <div class="principle-list"><article><span aria-hidden="true">↗</span><div><h3>Suggestions, with context.</h3><p>Candidate preloads for basic record loading. Separate guidance for counts, existence checks, and duplicate reads. A caller hint to inspect—not a guaranteed fix location.</p></div></article><article><span aria-hidden="true">◈</span><div><h3>Less data retained.</h3><p>SQL literals are redacted before samples are retained. Bind values are never stored. Samples and aggregate history are bounded. Identifiers may remain visible, so findings are not anonymous.</p></div></article><article><span aria-hidden="true">⌁</span><div><h3>Clear boundaries.</h3><p>Scans cover synchronous ActiveRecord SQL in the current fiber. Async work and lazy response-body queries are outside automatic coverage. All finding kinds can trigger test enforcement.</p></div></article></div>
+    </section>
+
+    <section class="install-section wrap" id="install" aria-labelledby="install-title">
+      <div class="install-content"><p class="eyebrow">04 / Check in</p><h2 id="install-title">Your next good move<br>is one gem away.</h2><p>Add AndOne to development and test, run <code>bundle install</code>, then restart your app. Rails takes care of the hooks.</p><div class="install-code"><div class="install-code-header"><span>Gemfile</span><button type="button" class="copy-button" data-copy="gemfile" hidden>Copy snippet <span aria-hidden="true">⧉</span></button></div><pre><code id="gemfile">group :development, :test do
+  gem "and_one"
+end</code></pre></div><p class="copy-status" role="status" aria-live="polite"></p><div class="install-notes"><span><strong>Development</strong> notices + logs</span><span><strong>Test</strong> raises on findings</span><span><strong>Production</strong> disabled by default</span></div><a class="button button-dark" href="https://github.com/keiththomps/and_one#readme">Read the documentation <span aria-hidden="true">↗</span></a></div>
+      <div class="install-art" aria-hidden="true"><div class="large-ball"><div></div></div><span>AND<br>ONE.</span><p>THE EXTRA POINT IS THE POINT.</p></div>
+    </section>
+
+    <section class="faq wrap" aria-labelledby="faq-title"><div><p class="eyebrow">Before tip-off</p><h2 id="faq-title">Good questions.</h2></div><div class="faq-list">
+      <details><summary>Will every finding be an N+1?<span aria-hidden="true">+</span></summary><p>No. Findings distinguish suspected association N+1s, identical reads, repeated aggregates, and generic repetition. Deliberate batching can also trigger findings. Review the evidence, verify suggestions, and use ignore rules for accepted patterns.</p></details>
+      <details><summary>Do I need another service or account?<span aria-hidden="true">+</span></summary><p>No. AndOne runs in your application. Aggregate findings live in bounded process-local memory by default; opt-in file storage shares them across cooperating processes. Rails development/test also writes a session-scoped logfile by default.</p></details>
+      <details><summary>Can my whole team use the dashboard?<span aria-hidden="true">+</span></summary><p>The development dashboard at <code>/__and_one</code> allows direct loopback peers by default. For shared development, use trusted authentication with an explicit access guard. A local proxy can make remote clients appear local; secure it rather than assuming redaction is enough. <a href="https://github.com/keiththomps/and_one/blob/main/docs/usage.md#capture-privacy-and-dashboard-access">Read the access guidance.</a></p></details>
+      <details><summary>Which versions and databases are supported?<span aria-hidden="true">+</span></summary><p>Ruby 3.2+ and ActiveRecord, ActiveSupport, and Railties 7.0+, in compatible combinations. CI exercises selected Ruby/Rails versions with SQLite, PostgreSQL, and MySQL. Standalone ActiveRecord scripts can scan explicitly; other ORMs are not supported. <a href="https://github.com/keiththomps/and_one/blob/main/docs/compatibility.md">See the tested matrix.</a></p></details>
+    </div></section>
+  </main>
+
+  <footer class="site-footer wrap"><div><a class="brand" href="./"><img src="./assets/icon.svg" width="28" height="28" alt="">AndOne<span class="brand-dot">.</span></a><p>Better queries. Better game.</p></div><nav aria-label="Footer navigation"><a href="https://github.com/keiththomps/and_one">Source <span aria-hidden="true">↗</span></a><a href="https://github.com/keiththomps/and_one#readme">Documentation</a><a href="https://github.com/keiththomps/and_one/blob/main/LICENSE.txt">MIT license</a></nav><span class="footer-note">Made for the Rails community.</span></footer>
+</body>
+</html>
