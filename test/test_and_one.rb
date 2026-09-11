@@ -34,7 +34,7 @@ class TestGithubActionsAnnotations < Minitest::Test
     end
 
     assert_match(/^::warning /, output)
-    assert_includes output, "N+1 detected"
+    assert_includes output, "Repeated-query finding"
     assert_includes output, "comments"
   end
 

@@ -37,12 +37,12 @@ module AndOne
 
     def render_fallback(detections)
       summaries = detections.first(5).map do |detection|
-        "<li>#{detection.count}x <code>#{escape(detection.table_name || "unknown")}</code></li>"
+        "<li>#{detection.count}x <code>#{escape(detection.table_name || "unknown")}</code> — #{escape(detection.classification_label)}</li>"
       end
       <<~HTML
         <aside id="and-one-toast" role="status" aria-live="polite">
           <details>
-            <summary>AndOne: #{detections.size} N+1 findings detected</summary>
+            <summary>AndOne: #{detections.size} repeated-query findings detected</summary>
             <ul>#{summaries.join}</ul>
             <a href="#{DevUI::MOUNT_PATH}">View Dashboard →</a>
           </details>
@@ -52,11 +52,11 @@ module AndOne
 
     def render_toast(detections)
       count = detections.size
-      label = "N+1 quer#{count == 1 ? "y" : "ies"}"
+      label = "repeated-query finding#{"s" if count != 1}"
 
       summaries = detections.map do |d|
         table = escape(d.table_name || "unknown")
-        "#{d.count}x <code>#{table}</code>"
+        "#{d.count}x <code>#{table}</code> — #{escape(d.classification_label)}"
       end.first(5)
 
       extra = count > 5 ? "<div class=\"and-one-toast-extra\">...and #{count - 5} more</div>" : ""

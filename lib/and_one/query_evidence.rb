@@ -15,7 +15,8 @@ module AndOne
 
       projection = @tokens[1...from_index]
       return :count if word?(projection.first, "count") && projection[1]&.text == "("
-      return :exists if word?(projection.first, "exists") || projection.any? { |token| identifier(token) == "one" }
+      return :aggregate if projection.first&.kind == :word && %w[sum avg min max].include?(projection.first.text) && projection[1]&.text == "("
+      return :exists if word?(projection.first, "exists") || existence_projection?(projection)
       return :records if projection.map(&:text) == ["*"] || record_projection?(projection)
 
       :scalar
@@ -51,6 +52,13 @@ module AndOne
       source = boundary ? tail.first(boundary) : tail
       source = source.reject { |token| token.text == ";" }
       source.one? && identifier(source.first)
+    end
+
+    def existence_projection?(projection)
+      # Redacted literals become ?, which PostgreSQL lexes as a JSON operator.
+      # Accept that display marker only in the exact `? AS one` projection.
+      projection.size == 3 && %i[parameter symbol].include?(projection.first.kind) && projection.first.text == "?" &&
+        word?(projection[1], "as") && identifier(projection[2]) == "one"
     end
 
     def record_projection?(projection)

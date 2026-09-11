@@ -53,6 +53,38 @@ module AndOne
       output
     end
 
+    # Feed original lexical values directly into a keyed digest; never return
+    # them or attach them to retained tokens. Reject ambiguous SQL entirely.
+    def signature_into?(digest, binds)
+      index = 0
+      previous = nil
+      until @scanner.eos?
+        next if @scanner.scan(/\s+/)
+
+        start = @scanner.pos
+        token = next_token
+        next unless token
+        return false if token.kind == :opaque
+
+        raw = @scanner.string.byteslice(start...@scanner.pos)
+        return false if raw.include?("\\") || ambiguous_identifier?(token, previous)
+
+        previous = token
+
+        if token.kind == :parameter && raw.match?(/\A(?:\$\d+|\?\d*|[:@$][A-Za-z_]\w*)\z/)
+          return false unless binds && index < binds.size
+          return false unless ["?", "$#{index + 1}", "?#{index + 1}"].include?(raw)
+
+          digest << "bind:#{binds[index].bytesize}:" << binds[index]
+          index += 1
+        else
+          value = token.kind == :parameter ? raw : token.text
+          digest << "#{token.kind}:#{value.bytesize}:" << value
+        end
+      end
+      !binds || index == binds.size
+    end
+
     private
 
     def ambiguous_identifier?(token, previous)

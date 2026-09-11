@@ -67,6 +67,44 @@ are evaluated during capture against the ignore-list instance selected at scan
 start. Reload ignore files between scans, not during a scan. Other ignore rules
 and thresholds continue to apply normally.
 
+## Classification evidence
+
+Each group keeps one 32-byte HMAC-SHA256 signature plus fixed-size missing/variation
+flags and SQL-operation metadata. A random 32-byte key is generated per detector;
+neither keys nor digests are exposed on detections, serialized, or logged. Thus
+stored output cannot be used to dictionary-guess low-entropy bind values. This
+is separate from sample redaction and does not anonymize visible identifiers.
+
+Signature input is limited to 8,192 SQL bytes, 64 binds, and 8,192 encoded bind
+bytes. Only already materialized arrays of plain String, Integer, Float, boolean,
+and nil values are supported. Unsupported types (including dates, decimals,
+adapter wrappers), missing prepared-query values, mismatched placeholder counts,
+and callable metadata produce unknown value evidence. No bind object's casting
+methods or callback is invoked; query execution and cache state are untouched.
+
+The lexer streams token/value fragments into the digest, ignoring whitespace,
+ordinary comments, and keyword case. Safe numeric, boolean, quoted-string, and
+PostgreSQL dollar-string literals participate without being retained. Opaque or
+unterminated tokens, backslash escapes, and ambiguous SQLite/unknown-adapter
+unqualified double quotes abstain. Equality is lexical/type-sensitive, not full
+SQL semantic equivalence: alternate literal spellings can appear different.
+Only anonymous `?` and sequential `$1, $2, ...` / `?1, ?2, ...`
+placeholders are supported. Named, repeated, reordered, or count-mismatched
+parameter mappings abstain.
+
+All occurrences contribute, including those beyond the five retained samples.
+Any missing signature prevents duplicate/association classification; recognizable
+COUNT/SUM/AVG/MIN/MAX/EXISTS projections can still support a repeated-aggregate
+label from structure alone. Varying signatures only support an association
+*candidate* for simple record reads with qualified equality/IN predicates. They
+do not identify which value varied, prove a parent loop, or distinguish deliberate
+batching from accidental repetition. No estimated savings or cache-safety claim
+is made. Classification does not change thresholds, ignores, or enforcement.
+The existing association resolver independently supplies qualified SQL-based
+advice; duplicate reads receive reuse/freshness guidance instead of a preload.
+
+See [finding kinds and compatibility](../README.md#finding-classification).
+
 ## Observed finding costs
 
 SQL notification start/finish timestamps use ActiveSupport's monotonic subscriber.

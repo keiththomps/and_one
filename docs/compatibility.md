@@ -82,8 +82,9 @@ there is deliberately no aggregate accuracy/marketing score.
   queries detected, but exact association advice is explicitly unsupported.
 - COUNT, EXISTS, and scalar reads: operation-specific guidance, not record-preload
   advice.
-- Identical lookups and intentional batching: known false positives for the
-  association-N+1 interpretation. Tests record today's behavior, not endorse it.
+- Identical lookups: classified as duplicate reads using bounded bind signatures,
+  without record-preload advice. Intentional batching still triggers findings;
+  SQL/value variation alone cannot prove application intent.
 - Query-cache hits and preloaded loading: intentional non-N+1 examples without
   findings. Cached queries do not count as physical database work.
 - One child load below the repetition threshold: an explicit known false negative

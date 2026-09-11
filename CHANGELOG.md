@@ -2,6 +2,7 @@
 
 ### Added
 
+- Classify repeated reads using bounded, scan-keyed bind/literal signatures; expose kind/confidence across output and storage, distinguish duplicate reads from association candidates, and abstain on missing evidence without changing thresholds or ignores (#21).
 - Measure eligible SQL notification costs with monotonic timing, persist constant-space per-issue rollups, expose JSON summaries, and sort the dashboard by observed time, occurrences, or executed queries; label cache exclusions and unknown historical coverage (#22).
 
 ### Fixed

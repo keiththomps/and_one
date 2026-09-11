@@ -23,7 +23,7 @@ module AndOne
       parts = []
       parts << ""
       parts << colorize(SEPARATOR, :red)
-      parts << colorize(" 🏀 And One! #{detections.size} N+1 quer#{detections.size == 1 ? "y" : "ies"} detected", :red,
+      parts << colorize(" 🏀 And One! #{detections.size} repeated-query finding#{"s" if detections.size != 1} detected", :red,
                         :bold)
       parts << colorize(SEPARATOR, :red)
 
@@ -46,6 +46,7 @@ module AndOne
       # Header with count and fingerprint
       lines << colorize("  #{index}) #{detection.count}x repeated query on `#{detection.table_name || "unknown"}`",
                         :yellow, :bold)
+      lines << colorize("     #{detection.classification_label}", :dim)
       lines << colorize("     fingerprint: #{detection.fingerprint}", :dim)
       lines << colorize("     issue_id: #{detection.issue_id}", :dim)
       lines << ""
@@ -57,7 +58,7 @@ module AndOne
 
       # Origin — where the N+1 is triggered
       if detection.origin_frame
-        lines << colorize("  Origin (where the N+1 is triggered):", :cyan)
+        lines << colorize("  Origin (where the repeated query is triggered):", :cyan)
         lines << colorize("  → #{format_frame(detection.origin_frame)}", :yellow)
         lines << ""
       end

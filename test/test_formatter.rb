@@ -26,7 +26,7 @@ class TestFormatter < Minitest::Test
     output = formatter.format(detections)
 
     assert_includes output, "And One!"
-    assert_includes output, "N+1"
+    assert_includes output, "repeated-query finding"
     assert_includes output, "comments"
     assert_includes output, "repeated query"
   end

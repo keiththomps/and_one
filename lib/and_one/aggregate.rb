@@ -73,16 +73,17 @@ module AndOne
     def summary
       entries = detections
 
-      return "No N+1 queries detected this session." if entries.empty?
+      return "No repeated-query findings detected this session." if entries.empty?
 
       lines = []
       lines << ""
-      lines << "🏀 AndOne Session Summary: #{entries.size} unique N+1 issue#{"s" if entries.size != 1}"
+      lines << "🏀 AndOne Session Summary: #{entries.size} unique repeated-query issue#{"s" if entries.size != 1}"
       lines << ("─" * 60)
 
       entries.each_with_index do |(fp, entry), i|
         det = entry.detection
         lines << "  #{i + 1}) #{det.table_name || "unknown"} — #{entry.occurrences} occurrence#{"s" if entry.occurrences != 1}"
+        lines << "     #{det.classification_label}"
         lines << "     #{det.sample_query[0, 120]}"
         lines << "     origin: #{det.origin_frame}" if det.origin_frame
         lines << "     fingerprint: #{det.fingerprint}"
@@ -158,6 +159,8 @@ module AndOne
         "queries" => det.queries.first(MAX_SAMPLES).map { |sql| bounded(sql, MAX_SQL_BYTES) },
         "caller_strings" => det.raw_caller_strings.first(MAX_FRAMES).map { |frame| bounded(frame, MAX_FRAME_BYTES) },
         "count" => det.count,
+        "kind" => det.kind,
+        "confidence" => det.confidence,
         "query_cost" => det.query_cost&.to_h,
         "adapter" => det.adapter && bounded(det.adapter, 128),
         "fingerprint" => det.fingerprint,
@@ -172,6 +175,8 @@ module AndOne
         queries: det_data["queries"],
         raw_caller_strings: det_data["caller_strings"],
         count: det_data["count"],
+        kind: det_data["kind"],
+        confidence: det_data["confidence"],
         adapter: det_data["adapter"],
         connection_id: det_data["connection_id"],
         issue_id: det_data["issue_id"],

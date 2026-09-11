@@ -69,12 +69,12 @@ module AndOne
     def report_annotations(detections)
       detections.each do |detection|
         file, line = parse_frame_location(detection.fix_location || detection.origin_frame)
-        query_count = "#{detection.count} queries to `#{detection.table_name || "unknown"}`"
+        query_count = "#{detection.count} queries to `#{detection.table_name || "unknown"}` — #{detection.classification_label}"
         if file
           hint = "Possible fix location (heuristic). #{annotation_hint(detection)}"
-          $stdout.puts "::warning file=#{file},line=#{line || 1}::N+1 detected: #{query_count}. #{hint}"
+          $stdout.puts "::warning file=#{file},line=#{line || 1}::Repeated-query finding: #{query_count}. #{hint}"
         else
-          $stdout.puts "::warning ::N+1 detected: #{query_count}."
+          $stdout.puts "::warning ::Repeated-query finding: #{query_count}."
         end
       end
     end
