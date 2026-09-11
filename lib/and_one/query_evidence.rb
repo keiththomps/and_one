@@ -55,7 +55,9 @@ module AndOne
     end
 
     def existence_projection?(projection)
-      projection.size == 3 && projection.first.kind == :parameter &&
+      # Redacted literals become ?, which PostgreSQL lexes as a JSON operator.
+      # Accept that display marker only in the exact `? AS one` projection.
+      projection.size == 3 && %i[parameter symbol].include?(projection.first.kind) && projection.first.text == "?" &&
         word?(projection[1], "as") && identifier(projection[2]) == "one"
     end
 

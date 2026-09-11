@@ -72,6 +72,27 @@ class TestRecommendations < Minitest::Test
     end
   end
 
+  def test_postgresql_exists_advice_survives_redacted_projection
+    sql = 'SELECT 1 AS one FROM "comments" WHERE "comments"."post_id" = $1 LIMIT $2'
+    %i[raw redacted].each do |mode|
+      AndOne.capture_mode = mode
+      detection = AndOne::Detection.new(queries: [sql], count: 3, adapter: "postgresql")
+      assert_equal :exists, AndOne::QueryEvidence.new(detection.sample_query, adapter: detection.adapter).operation
+      suggestion = resolve(detection)
+      assert_equal :exists, suggestion.operation
+      refute suggestion.actionable?
+      assert_includes suggestion.fix_hint, "existence checks"
+      assert_equal "exists", AndOne::JsonFormatter.new.format_hashes([detection]).first[:suggestion][:operation]
+    end
+  end
+
+  def test_postgresql_scalar_alias_and_json_operators_are_not_exists
+    ["SELECT body AS one FROM comments", 'SELECT "?" AS one FROM comments',
+     "SELECT body ? 'key' AS one FROM comments"].each do |sql|
+      assert_equal :scalar, AndOne::QueryEvidence.new(sql, adapter: "postgresql").operation
+    end
+  end
+
   def test_and_or_and_join_do_not_imply_join_efficiency
     ["AND comments.body = 'hello'", "OR comments.body = 'hello'"].each do |condition|
       detection = detection_for("SELECT comments.* FROM comments WHERE comments.post_id = 1 #{condition}")
