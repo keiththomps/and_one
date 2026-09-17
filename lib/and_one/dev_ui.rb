@@ -69,6 +69,23 @@ module AndOne
        "Coverage: #{cost.occurrences}/#{entry.occurrences} occurrences"].map { |text| h(text) }.join("<br>")
     end
 
+    def resolve_suggestion(detection)
+      AndOne::AssociationResolver.resolve(detection, detection.raw_caller_strings)
+    rescue StandardError
+      nil
+    end
+
+    def lifecycle_cell(entry)
+      lines = [h(entry.status || "open")]
+      if entry.resolution
+        lines << "Last resolution: #{h(entry.resolution["resolved_at"])}"
+        lines << "Note: #{h(entry.resolution["note"])}"
+        lines << "Revision: #{h(entry.resolution["revision"])}" if entry.resolution["revision"]
+      end
+      lines << "Reopened: #{h(entry.reopened_at.iso8601)} (#{h(entry.reopen_reason)})" if entry.reopened_at
+      lines.join("<br>")
+    end
+
     def classification_cell(detection)
       h(detection.classification_label)
     end
@@ -77,7 +94,7 @@ module AndOne
       rows = if entries.empty?
                <<~HTML
                  <tr>
-                   <td colspan="7" class="empty">
+                   <td colspan="8" class="empty">
                      No N+1 queries detected yet.
                    </td>
                  </tr>
@@ -85,11 +102,7 @@ module AndOne
              else
                entries.map.with_index do |(fp, entry), i|
                  det = entry.detection
-                 suggestion = begin
-                   AndOne::AssociationResolver.resolve(det, det.raw_caller_strings)
-                 rescue StandardError
-                   nil
-                 end
+                 suggestion = resolve_suggestion(det)
                  fix = suggestion&.fix_hint ? h(suggestion.fix_hint) : "—"
                  strict_hint = suggestion&.strict_loading_hint ? h(suggestion.strict_loading_hint) : ""
                  loading_hint = suggestion&.loading_strategy_hint ? h(suggestion.loading_strategy_hint) : ""
@@ -101,6 +114,7 @@ module AndOne
                    <tr>
                      <td>#{i + 1}</td>
                      <td><code>#{h(det.table_name || "unknown")}</code><div>#{classification_cell(det)}</div></td>
+                     <td>#{lifecycle_cell(entry)}</td>
                      <td>#{entry.occurrences}</td>
                      <td>#{cost_cell(entry)}</td>
                      <td><code class="sql">#{h(truncate(det.sample_query, 200))}</code></td>
@@ -161,11 +175,13 @@ module AndOne
             <a href="#{MOUNT_PATH}?sort=queries">Sort by executed queries</a>
           </div>
           <p class="subtitle">SQL notification time, not estimated savings. Cache hits and async queries excluded. Unknown historical costs sort last.</p>
+          <p class="subtitle">Resolved means explicitly marked after verification, not automatically proven absent. Recurrence reopens the issue. Manage status with the and-one CLI.</p>
           <table>
             <thead>
               <tr>
                 <th>#</th>
                 <th>Table</th>
+                <th>Status</th>
                 <th>Occurrences</th>
                 <th>Observed SQL cost</th>
                 <th>Query</th>

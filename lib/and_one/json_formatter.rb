@@ -42,9 +42,13 @@ module AndOne
       JSON.generate(entries.values.map do |entry|
         format_detection(entry.detection).merge(
           occurrences: entry.occurrences,
-          first_seen_at: entry.first_seen_at&.iso8601,
-          last_seen_at: entry.last_seen_at&.iso8601,
-          cumulative_query_cost: entry.query_cost&.to_h
+          first_seen_at: entry.first_seen_at&.iso8601(6),
+          last_seen_at: entry.last_seen_at&.iso8601(6),
+          cumulative_query_cost: entry.query_cost&.to_h,
+          status: entry.status || "open",
+          resolution: entry.resolution,
+          reopened_at: entry.reopened_at&.iso8601(6),
+          reopen_reason: entry.reopen_reason
         )
       end)
     end
@@ -99,7 +103,10 @@ module AndOne
       if @backtrace_cleaner
         @backtrace_cleaner.clean(backtrace)
       else
-        backtrace
+        # Offline CLI inspection has no Rails cleaner. Retain the application
+        # loop/callers before the output limit is consumed by SQL internals.
+        application, framework = backtrace.partition { |frame| CapturePolicy.application_frame?(frame) }
+        application + framework
       end
     end
 

@@ -4,11 +4,12 @@ require "json"
 require "fileutils"
 require "time"
 require_relative "aggregate_store"
+require_relative "aggregate_lifecycle"
 
 module AndOne
   # Tracks unique N+1 detections across requests/jobs in a server session.
-  # Each unique N+1 (by issue identity) is only reported once.
-  # Subsequent occurrences are silently counted.
+  # Each unique N+1 (by issue identity) is reported once while open.
+  # A recurrence after resolution reopens and reports it again.
   #
   # Memory storage is the default. An explicit path selects shared JSON storage.
   # Both stores retain only a bounded least-recently-observed history.
@@ -19,7 +20,11 @@ module AndOne
   #   AndOne.aggregate.reset!
   #
   class Aggregate
-    Entry = Struct.new(:detection, :occurrences, :first_seen_at, :last_seen_at, :query_cost)
+    include AggregateLifecycle
+
+    Entry = Struct.new(:detection, :occurrences, :first_seen_at, :last_seen_at, :query_cost,
+                       :status, :resolution, :reopened_at, :reopen_reason)
+    class IssueNotFound < StandardError; end
 
     MAX_ENTRIES = 100
     MAX_SAMPLES = 5
@@ -33,13 +38,14 @@ module AndOne
       @warning_mutex = Mutex.new
     end
 
-    # Record a detection. Returns true if this is a NEW unique detection
-    # (first time seeing this issue identity), false if it's a repeat.
+    # Returns true for a new issue or the recurrence of a resolved issue;
+    # returns false for an already-open repeat.
     def record(detection) # rubocop:disable Naming/PredicateMethod -- public compatibility API
       record_many([detection]).include?(detection)
     end
 
-    # One transaction per scan. On failure all findings remain reportable.
+    # One transaction per scan. Returns new/reopened detections for reporting.
+    # On failure all findings remain reportable.
     def record_many(detections)
       safely(default: detections) do
         @store.transaction do |data|
@@ -56,6 +62,27 @@ module AndOne
           data.transform_values { |entry| deserialize_entry(entry) }
         end
       end
+    end
+
+    # Operator mutations always propagate failures; never claim a failed write succeeded.
+    # Resolving twice is idempotent and preserves the original verification evidence.
+    def resolve!(issue_id, note:, revision: nil)
+      raise ArgumentError, "A verification note is required" unless note.is_a?(String) && !note.strip.empty?
+
+      transition(issue_id) do |entry|
+        next if entry["status"] == "resolved"
+
+        entry["status"] = "resolved"
+        entry["resolution"] = {
+          "resolved_at" => Time.now.iso8601(6), "note" => bounded(note.strip, 2048),
+          "revision" => revision && bounded(revision, 128),
+          "occurrences_at_resolution" => entry["occurrences"]
+        }
+      end
+    end
+
+    def reopen!(issue_id)
+      transition(issue_id) { |entry| reopen_entry!(entry, "manual") if entry["status"] == "resolved" }
     end
 
     def size
@@ -83,7 +110,7 @@ module AndOne
       entries.each_with_index do |(fp, entry), i|
         det = entry.detection
         lines << "  #{i + 1}) #{det.table_name || "unknown"} — #{entry.occurrences} occurrence#{"s" if entry.occurrences != 1}"
-        lines << "     #{det.classification_label}"
+        lines << "     #{det.classification_label}; status: #{entry.status}"
         lines << "     #{det.sample_query[0, 120]}"
         lines << "     origin: #{det.origin_frame}" if det.origin_frame
         lines << "     fingerprint: #{det.fingerprint}"
@@ -97,19 +124,33 @@ module AndOne
 
     private
 
+    def transition(issue_id)
+      @store.transaction do |data|
+        normalize_data!(data)
+        entry = data[issue_id]
+        raise IssueNotFound, "Issue not retained in selected session" unless entry
+
+        yield entry
+        deserialize_entry(entry)
+      end
+    end
+
     def record_new?(data, detection)
       key = detection.issue_id
       existing = data.delete(key)
-      now = Time.now.iso8601
+      reopened = existing && existing["status"] == "resolved"
+      reopen_entry!(existing, "observed") if reopened
+      now = Time.now.iso8601(6)
       data[key] = if existing
                     existing.merge("occurrences" => existing.fetch("occurrences") + 1, "last_seen_at" => now,
                                    "query_cost" => merged_cost(existing, detection)&.to_h)
                   else
                     { "detection" => serialize_detection(detection), "occurrences" => 1,
-                      "first_seen_at" => now, "last_seen_at" => now, "query_cost" => detection.query_cost&.to_h }
+                      "first_seen_at" => now, "last_seen_at" => now, "query_cost" => detection.query_cost&.to_h,
+                      "status" => "open" }
                   end
       data.shift while data.size > MAX_ENTRIES
-      !existing
+      !existing || !!reopened
     end
 
     def normalize_data!(data)
@@ -118,9 +159,9 @@ module AndOne
         raise IOError, "Invalid occurrence count" unless entry["occurrences"].is_a?(Integer) && entry["occurrences"].positive?
 
         bounded_entry = { "detection" => serialize_detection(detection), "occurrences" => entry["occurrences"],
-                          "first_seen_at" => parse_time(entry["first_seen_at"])&.iso8601,
-                          "last_seen_at" => parse_time(entry["last_seen_at"])&.iso8601,
-                          "query_cost" => stored_cost(entry)&.to_h }
+                          "first_seen_at" => parse_time(entry["first_seen_at"])&.iso8601(6),
+                          "last_seen_at" => parse_time(entry["last_seen_at"])&.iso8601(6),
+                          "query_cost" => stored_cost(entry)&.to_h }.merge(lifecycle(entry))
         [detection.issue_id, bounded_entry]
       end
       data.replace(normalized)
@@ -183,12 +224,15 @@ module AndOne
         fingerprint: det_data["fingerprint"],
         query_cost: stored_cost(det_data)
       )
+      state = lifecycle(entry_data)
       Entry.new(
         detection: det,
         occurrences: entry_data["occurrences"],
         first_seen_at: parse_time(entry_data["first_seen_at"]),
         last_seen_at: parse_time(entry_data["last_seen_at"]),
-        query_cost: stored_cost(entry_data)
+        query_cost: stored_cost(entry_data),
+        status: state["status"], resolution: state["resolution"],
+        reopened_at: parse_time(state["reopened_at"]), reopen_reason: state["reopen_reason"]
       )
     end
 

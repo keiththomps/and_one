@@ -31,6 +31,20 @@ class TestEnforcement < Minitest::Test
     assert_equal 2, AndOne.aggregate.detections.values.first.occurrences
   end
 
+  def test_resolved_issue_still_raises_and_recurrence_is_reported_again
+    assert_raises(AndOne::NPlus1Error) { AndOne.scan { load_comments } }
+    id = AndOne.aggregate.detections.keys.first
+    AndOne.aggregate.resolve!(id, note: "Regression test passed")
+    assert_equal "resolved", AndOne.aggregate.detections.fetch(id).status
+
+    2.times { assert_raises(AndOne::NPlus1Error) { AndOne.scan { load_comments } } }
+    assert_equal 2, @reports.size
+    entry = AndOne.aggregate.detections.fetch(id)
+    assert_equal "open", entry.status
+    assert_equal "observed", entry.reopen_reason
+    assert_equal 3, entry.occurrences
+  end
+
   def test_non_raising_scan_does_not_suppress_later_failure
     AndOne.raise_on_detect = false
     AndOne.scan { load_comments }

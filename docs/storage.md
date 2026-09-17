@@ -40,6 +40,19 @@ isolation: the application owns their naming, retention, and sharing policy.
 Set `aggregate_path = nil` and `aggregate_store = :memory` to return to memory.
 Configure services only between scans, with other writers stopped.
 
+## Issue resolution
+
+Entries default to `open`. Mark a verified fix explicitly rather than deleting it:
+
+```ruby
+AndOne.aggregate.resolve!(issue_id, note: "Regression test passes", revision: "abc123")
+AndOne.aggregate.reopen!(issue_id)
+```
+
+These operator actions propagate errors even when `storage_strict` is false. Missing IDs raise `AndOne::Aggregate::IssueNotFound`. They preserve observations and cost totals and do not affect ignore rules or enforcement. A later recorded detection automatically reopens a resolved issue and makes it reportable again. Status changes share the store transaction lock with query recording.
+
+The latest resolution and reopening metadata remain with the retained entry; this is not an unbounded audit history or permanent issue tracker. Reset/eviction removes both evidence and lifecycle metadata. Old entries load as open; all cooperating writers must be upgraded/restarted before using resolution, since older code does not preserve these fields. See [CLI lifecycle commands and semantics](agents.md#resolve-and-reopen-verified-issues).
+
 ## Reset and cleanup ownership
 
 No booting process owns the right to erase another process's findings. Reset is

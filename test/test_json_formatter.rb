@@ -103,6 +103,17 @@ class TestJsonFormatter < Minitest::Test
     assert parsed["backtrace"].size <= 10
   end
 
+  def test_offline_backtrace_prioritizes_application_frames_before_truncation
+    framework = 10.times.map { |i| "ruby/3.4/lib/ruby/gems/activesupport/lib/notifications.rb:#{i + 1}" }
+    application = ["app/models/user.rb:20:in 'paid?'", "app/views/development/_user_switcher.html.erb:7"]
+    detection = AndOne::Detection.new(queries: ["SELECT * FROM posts"], count: 3,
+                                      raw_caller_strings: framework + application)
+    output = AndOne::JsonFormatter.new.format_hashes([detection]).first
+
+    assert_equal application, output[:backtrace].first(2)
+    assert_operator output[:backtrace].size, :<=, 10
+  end
+
   def test_format_hashes_returns_array_of_hashes
     detections = AndOne.scan do
       Post.all.each { |post| post.comments.to_a }
