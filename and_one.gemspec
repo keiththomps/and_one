@@ -22,7 +22,7 @@ Gem::Specification.new do |spec|
   spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.files = Dir.chdir(__dir__) do
-    Dir["lib/**/*.rb", "docs/**/*.md", "README.md", "CHANGELOG.md", "LICENSE.txt"]
+    Dir["lib/**/*.rb", "exe/*", "skills/**/*.md", "docs/**/*.md", "README.md", "CHANGELOG.md", "LICENSE.txt"]
   end
   spec.bindir = "exe"
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }

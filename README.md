@@ -139,7 +139,7 @@ Fingerprints ignore a query shape at **all locations/connections**; `issue_id` d
 
 ### Storage and deduplication
 
-The aggregate retains at most **100 issues**, evicting the least recently observed. Logs, annotations, and callbacks report only new retained issues; later occurrences update counts and costs. Evicted issues can be reported again. Every violating scan still raises when enforcement is enabled.
+The aggregate retains at most **100 issues**, evicting the least recently observed. Logs, annotations, and callbacks report new retained issues and recurrences of resolved issues; other occurrences update counts and costs. Evicted issues can be reported again. Every violating scan still raises when enforcement is enabled.
 
 ```ruby
 AndOne.aggregate.summary    # formatted retained findings
@@ -165,6 +165,22 @@ The dashboard defaults to direct loopback peers (`127.0.0.1`/`::1`) and sends `C
 - Detection excludes cached queries and schema events. Costs describe eligible executed reads, not total request time or database-server CPU time.
 - Samples and aggregate history are bounded, but distinct groups per scan and incoming SQL size are not. Parsing work and total scan memory are not strictly bounded.
 - Block scans clean up on exceptions and nonlocal exits; nested scans reuse the outer scope. Use `AndOne.pause { ... }` to exclude known work.
+
+## Agent CLI and skill
+
+Enable `aggregate_store = :file` in development, restart the app, and reproduce a finding. Then inspect it without booting Rails:
+
+```bash
+bundle binstubs and_one
+bin/and-one issues --json
+bin/and-one show ISSUE_ID --json
+bin/and-one resolve ISSUE_ID --note "Fixed and verified by regression test" --json
+bin/and-one issues --status resolved --json
+bin/and-one reopen ISSUE_ID --json
+bin/and-one skill install --target pi # or agents / claude
+```
+
+Inspection commands read persisted snapshots without changing them; explicit resolve/reopen commands update workflow metadata. `issues` defaults to open findings. A resolved issue automatically reopens and reports on recurrence; detection and test enforcement are never suppressed. Restart all cooperating processes after upgrading before resolving issues. The bundled skill guides agents through reproduction, fixes, query-growth regression tests, and verified resolution. Skill installation is explicit, project-local, and protects local edits. See [CLI commands, sessions, JSON contract, and skill updates](docs/agents.md).
 
 ## Documentation
 

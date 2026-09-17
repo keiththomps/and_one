@@ -25,7 +25,8 @@ module AndOne
     class FileStore
       MAX_BYTES = 4 * 1024 * 1024
 
-      def initialize(path)
+      def initialize(path, require_existing: false)
+        @require_existing = require_existing
         @session = path if path.respond_to?(:activate!)
         @path = @session ? @session.path : path
         @mutex = Mutex.new
@@ -38,8 +39,9 @@ module AndOne
       def transaction(reset: false)
         @mutex.synchronize do
           @session&.activate!
-          FileUtils.mkdir_p(@path, mode: 0o700)
-          File.open(File.join(@path, "aggregate.lock"), File::RDWR | File::CREAT, 0o600) do |lock|
+          FileUtils.mkdir_p(@path, mode: 0o700) unless @require_existing
+          mode = @require_existing ? File::RDWR : File::RDWR | File::CREAT
+          File.open(File.join(@path, "aggregate.lock"), mode, 0o600) do |lock|
             lock.flock(File::LOCK_EX)
             data = reset ? {} : read_data
             before = JSON.generate(data)
@@ -55,7 +57,7 @@ module AndOne
 
       def read_data
         path = File.join(@path, "aggregate.json")
-        return {} unless File.exist?(path)
+        return {} if !@require_existing && !File.exist?(path)
 
         input = File.open(path, "rb") { |file| file.read(MAX_BYTES + 1) }
         raise IOError, "Aggregate exceeds byte limit" if input.bytesize > MAX_BYTES

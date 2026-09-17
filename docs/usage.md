@@ -195,9 +195,9 @@ This is especially useful for **N+1s coming from gems** where you can't add `.in
 
 ## Deduplication
 
-In development, the same N+1 can fire on every request, flooding your logs. AndOne automatically deduplicates — each unique issue (query shape + application origin + connection context) is reported only once while retained in the aggregate (per process by default, or across cooperating processes with file storage). Subsequent occurrences at that location are silently counted; the same SQL shape at a different location remains visible as a separate issue.
+In development, the same N+1 can fire on every request, flooding your logs. AndOne automatically deduplicates — each unique issue (query shape + application origin + connection context) is reported only once while open and retained in the aggregate (per process by default, or across cooperating processes with file storage). Subsequent occurrences at that location are silently counted; the same SQL shape at a different location remains visible as a separate issue.
 
-Deduplication applies to logs, GitHub annotations, logfile output, and `notifications_callback` (which receives only newly observed findings). Scan results still contain every non-ignored finding in that scan. When `raise_on_detect` is enabled, **every violating scan raises**, even if the pattern was already reported by another scan. Test matchers do not report or consume first-occurrence deduplication.
+Deduplication applies to logs, GitHub annotations, logfile output, and `notifications_callback` (which receives new findings and recurrences of resolved findings). Scan results still contain every non-ignored finding in that scan. When `raise_on_detect` is enabled, **every violating scan raises**, even if the pattern was already reported by another scan. Test matchers do not report or consume first-occurrence deduplication.
 
 You can check the session summary at any time:
 
@@ -420,7 +420,7 @@ Configure before scanning. Between scans, changing `aggregate_path`, `aggregate_
 
 ### Logfile delivery and failures
 
-New, ignore-filtered findings are flushed synchronously after each reporting scan, so they are visible before process exit. First-occurrence deduplication still applies: later occurrences update the aggregate, not the logfile. Buffered failures are retried on the next scan containing findings (even already-known findings), or explicitly with `AndOne.logfile_writer&.flush!`. Rails also attempts a final flush at exit. No timer threads are created.
+New, ignore-filtered findings are flushed synchronously after each reporting scan, so they are visible before process exit. First-occurrence deduplication still applies while an issue is open: later occurrences update the aggregate, not the logfile. A recurrence after explicit resolution reopens and reports the issue again; see [lifecycle commands](agents.md#resolve-and-reopen-verified-issues). Buffered failures are retried on the next scan containing findings (even already-known findings), or explicitly with `AndOne.logfile_writer&.flush!`. Rails also attempts a final flush at exit. No timer threads are created.
 
 Format/open/write failures retain pending entries. Cooperating processes use file locks; failed partial appends are rolled back when the filesystem permits. The retry buffer holds at most 1,000 unique findings; overflow rejects the new batch with a rate-limited diagnostic during reporting, preserving previously accepted entries. Newly rejected findings are not automatically redelivered because aggregate deduplication has already occurred. This is best-effort delivery, not crash durability or exactly-once delivery; shutdown, rollback failure, or buffer exhaustion can lose findings.
 

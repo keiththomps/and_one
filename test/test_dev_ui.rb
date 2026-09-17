@@ -54,6 +54,25 @@ class TestDevUI < Minitest::Test
     refute_includes html, "No N+1 queries detected yet"
   end
 
+  def test_shows_resolution_metadata_as_escaped_text
+    detection = AndOne::Detection.new(queries: ["SELECT * FROM posts"], count: 3,
+                                      raw_caller_strings: ["app/services/feed.rb:12"])
+    AndOne.aggregate.record(detection)
+    AndOne.aggregate.resolve!(detection.issue_id, note: "Verified <script>unsafe</script>", revision: "abc123")
+    dev_ui = AndOne::DevUI.new(->(_env) { [200, {}, ["app"]] })
+    _status, _headers, body = dev_ui.call("PATH_INFO" => "/__and_one", "REMOTE_ADDR" => "127.0.0.1")
+    assert_includes body.first, "resolved"
+    assert_includes body.first, "Last resolution:"
+    assert_includes body.first, "Revision: abc123"
+    assert_includes body.first, "&lt;script&gt;unsafe&lt;/script&gt;"
+    refute_includes body.first, "<script>unsafe</script>"
+
+    AndOne.aggregate.record(detection)
+    _status, _headers, body = dev_ui.call("PATH_INFO" => "/__and_one", "REMOTE_ADDR" => "127.0.0.1")
+    assert_includes body.first, "Reopened:"
+    assert_includes body.first, "(observed)"
+  end
+
   def test_shows_empty_state_when_no_detections
     app = ->(_env) { [200, {}, ["app"]] }
     dev_ui = AndOne::DevUI.new(app)

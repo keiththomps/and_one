@@ -2,11 +2,15 @@
 
 ### Added
 
+- Ship an `and-one` CLI with read-only findings/session inspection, explicit resolve/reopen transitions, versioned JSON and error statuses, plus a bundled Agent Skills workflow with project-local install/check commands and local-edit protection.
+- Track open/resolved state with bounded verification notes and optional revision metadata. Preserve evidence on resolution, automatically reopen and re-report recurring issues without suppressing enforcement, filter CLI lists by status, and expose state in the dashboard. Restart all cooperating writers before using lifecycle transitions.
+
 - Classify repeated reads using bounded, scan-keyed bind/literal signatures; expose kind/confidence across output and storage, distinguish duplicate reads from association candidates, and abstain on missing evidence without changing thresholds or ignores (#21).
 - Measure eligible SQL notification costs with monotonic timing, persist constant-space per-issue rollups, expose JSON summaries, and sort the dashboard by observed time, occurrences, or executed queries; label cache exclusions and unknown historical coverage (#22).
 
 ### Fixed
 
+- Prioritize retained application frames in JSON backtraces when no Rails cleaner is available, so offline CLI inspection exposes the calling loop rather than only framework internals.
 - Redact and bound SQL/backtrace samples before retention across all output sinks, preserve pre-redaction ignore matching, and restrict the dashboard to loopback by default with a configurable access guard. Add explicit risk-documented raw capture (#10).
 - Exclude mysql2 0.5.7 from the compatibility test stack due to its upstream empty-prepared-result crash; retain prepared-query coverage and document the application dependency workaround.
 - Preserve shared aggregate/log findings across boots, isolate environment/test sessions, and provide explicit reset and bounded stale-session cleanup (#8).
